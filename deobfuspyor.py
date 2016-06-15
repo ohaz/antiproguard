@@ -44,7 +44,8 @@ def deobfuscate(path):
     print(folded)
     # Renaming
     renamer = Renamer(to_read, path)
-    renamer.rename(['a', 'b', 'c', 'd', 'e'], ['new1', 'new2', 'new3', 'new4', 'new5'])
+    renamer.rename_package(['a', 'b', 'c', 'd', 'e'], ['new1', 'new2', 'new3', 'new4', 'new5'])
+    renamer.rename_function(['new1', 'new2', 'new3', 'new4', 'new5'], 'A', 'b', 'newname')
 
 
 def main():
@@ -53,6 +54,7 @@ def main():
     parser.add_argument('apk', metavar='apk', type=str, help='The apk to unpack')
     parser.add_argument('-t', '--threads', dest='threads', action='store', nargs=1, type=int,
                         help='Maximum amount of threads used', default=4)
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true', help='Show more detailed information')
     args = parser.parse_args()
 
     output_folder = os.path.basename(args.apk)[:-4]
@@ -65,14 +67,17 @@ def main():
     run(['java', '-jar', 'apktool.jar', 'd', apk_path])
     print('>> Decompiling to smali code done')
     deobfuscate(os.path.join(os.getcwd(), output_folder))
-
+    print('---------------------------------------------')
+    print('Done deobfuscating...')
     print('Rebuilding APK')
     run(['java', '-jar', 'apktool.jar', 'b', os.path.join(os.getcwd(), output_folder), '-o', apk_path+'_new.apk'])
-    print('Don\'t forget to sign your apk with the following commands:')
-    print('keytool -genkey -v -keystore my-release-key.keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000')
-    print('jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-release-key.keystore my_application.apk alias_name')
-    print('jarsigner -verify -verbose -certs my_application.apk')
-    print('zipalign -v 4 your_project_name-unaligned.apk your_project_name.apk')
+    if args.verbose:
+        print('---------------------------------------------')
+        print('Don\'t forget to sign your apk with the following commands:')
+        print('keytool -genkey -v -keystore my-release-key.keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000')
+        print('jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-release-key.keystore my_application.apk alias_name')
+        print('jarsigner -verify -verbose -certs my_application.apk')
+        print('zipalign -v 4 your_project_name-unaligned.apk your_project_name.apk')
 
 
 if __name__ == '__main__':
