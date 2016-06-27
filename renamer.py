@@ -4,6 +4,7 @@ import shutil
 from base import find_class_paths_and_iterate
 import difflib
 import re
+from base import verbose
 
 __author__ = 'ohaz'
 
@@ -34,6 +35,8 @@ class Renamer:
         for e in to_change:
             e.append(e[0].replace(os.path.join('', old_path), ''))
 
+        to_avoid = re.compile(r'(\s*const-string[/jumbo]?\s.*,\s".*")')
+
         # Create new folders and copy files there:
         self.create_and_copy(to_change, new_path)
         self.to_read = find_class_paths_and_iterate(self.base_path)
@@ -42,9 +45,20 @@ class Renamer:
             change = False
             with open(os.path.join(class_file[0], class_file[1]), 'r') as f:
                 content = f.read()
-                new_content = content.replace('L' + '/'.join(old_package), 'L' + '/'.join(new_package))
+                new_content = ''
+                for line in iter(content.splitlines()):
+                    search = to_avoid.findall(line)
+                    if len(search) == 0:
+                        new_content += line.replace('L' + '/'.join(old_package), 'L' + '/'.join(new_package))
+                    else:
+                        new_content += line
+                    new_content += os.linesep
                 if not new_content == content:
                     change = True
+                    if verbose:
+                        print('CHANGE IN {}'.format(class_file))
+                        for s in difflib.context_diff(content, new_content):
+                            print(s)
             if change:
                 os.remove(os.path.join(class_file[0], class_file[1]))
                 with open(os.path.join(class_file[0], class_file[1]), 'a+') as f:

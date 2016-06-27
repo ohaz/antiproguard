@@ -5,6 +5,7 @@ from defusedxml import ElementTree
 from api_counter import APICounter
 from renamer import Renamer
 from base import find_class_paths_and_iterate
+import base
 
 __author__ = 'ohaz'
 
@@ -45,7 +46,7 @@ def deobfuscate(path):
     # Renaming
     renamer = Renamer(to_read, path)
     renamer.rename_package(['a', 'b', 'c', 'd', 'e'], ['new1', 'new2', 'new3', 'new4', 'new5'])
-    renamer.rename_function(['new1', 'new2', 'new3', 'new4', 'new5'], 'A', 'b', 'newname')
+    # renamer.rename_function(['new1', 'new2', 'new3', 'new4', 'new5'], 'A', 'b', 'newname')
 
 
 def main():
@@ -72,6 +73,7 @@ def main():
     print('Rebuilding APK')
     run(['java', '-jar', 'apktool.jar', 'b', os.path.join(os.getcwd(), output_folder), '-o', apk_path+'_new.apk'])
     if args.verbose:
+        base.verbose = True
         print('---------------------------------------------')
         print('Don\'t forget to sign your apk with the following commands:')
         print('keytool -genkey -v -keystore my-release-key.keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000')
