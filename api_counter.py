@@ -3,6 +3,9 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 import json
+from pprint import pprint
+import copy
+from colorama import Fore, Style
 
 __author__ = 'ohaz'
 
@@ -11,40 +14,109 @@ class APICounter:
 
     def __init__(self, threads, to_read):
         self.lock = Lock()
-        self.pattern = re.compile(r'(invoke-\w+)\s\{([\w,\s]+)\},\sL((android|java)[/\w$0-9]+);->(.*)')
+        self.pattern = re.compile(r'(invoke-\w+)\s\{([\w,\s]+)\},\sL((java)[/\w$0-9]+);->(.*)')
         self.amount_dict = {}
         self.threads = threads
         self.to_read = to_read
+        with open('database.json', 'r') as f:
+            self.database = json.load(f)
+
+    def generate_sub_dict(self, path, key):
+        current = self.amount_dict
+        for k in path:
+            current = current[k]
+        return current.setdefault(key, {})
+
+    def get_sub_dict(self, path):
+        current = self.amount_dict
+        for k in path:
+            current = current[k]
+        return current
 
     def read_and_accumulate(self, path, f, start):
+        keys = start.split('\\')
+        self.lock.acquire()
+        for pos, key in enumerate(keys):
+            self.generate_sub_dict(keys[:pos], key)
+        self.lock.release()
+        own = {}
         with open(os.path.join(path, f), 'r') as file:
             content = file.read()
-            self.lock.acquire()
-            self.amount_dict[os.path.join(start, f)] = len(self.pattern.findall(content))
-            self.lock.release()
+            for pt in self.pattern.findall(content):
+                key = '{} ({}) {}->{}'.format(pt[0], pt[1], pt[2], pt[4])
+                own[key] = own.get(key, 0) + 1
+        amount = 0
+        for k in own:
+            amount += own[k]
+        own['.calls'] = copy.deepcopy(own)
+        own['.overall'] = amount
+        self.lock.acquire()
+        self.get_sub_dict(keys)[f] = own
+        self.lock.release()
 
-    def fold_dict(self):
-        new_dict = {}
-        for k in self.amount_dict:
-            v = self.amount_dict[k]
-            spl = k.split(os.sep)
-            new_key = spl[0]
-            if len(spl) > 2:
-                new_key = os.path.join(new_key, spl[1])
-            if len(spl) > 3:
-                new_key = os.path.join(new_key, spl[2])
-            new_dict[new_key] = new_dict.get(new_key, 0) + v
-        return new_dict
+    def fold_dict(self, dct):
+        if '.overall' not in dct:
+            dct['.overall'] = 0
+            dct['.calls'] = {}
+
+        for key in dct:
+            if key in ['.overall', '.calls']:
+                continue
+            child = dct[key]
+            if not key.endswith('.smali'):
+                self.fold_dict(child)
+            dct['.overall'] += child['.overall']
+            for entry in child['.calls']:
+                dct['.calls'][entry] = dct['.calls'].get(entry, 0) + child['.calls'][entry]
+
+        return dct
+
+    def remove_create_dump(self, path, ending, jsdct):
+        whole_path = os.path.basename(path) + ending
+        if os.path.exists(whole_path):
+            os.remove(whole_path)
+        with open(whole_path, 'a+') as f:
+            json.dump(jsdct, f)
+
+    def shorten_folded(self, dct):
+        if not isinstance(dct, dict):
+            return
+        if '.calls' in dct:
+            del dct['.calls']
+        for key in dct:
+            if key in ['.overall', '.calls']:
+                continue
+            self.shorten_folded(dct[key])
+        return dct
+
+    def compare(self, dct, path='', guess=None):
+        if not isinstance(dct, dict):
+            return
+
+        for lib_key in self.database:
+            lib = self.database[lib_key]
+            for version in lib['versions']:
+                if version['data']['.overall'] in range(max(0, int(dct['.overall'] * 0.975)), int(dct['.overall'] * 1.05)):
+                    guess = lib
+                    error = abs(100 - (dct['.overall'] * 1.0) / ((version['data']['.overall'] * 1.0) / 100))
+                    print(Fore.YELLOW+'Guessing that', path, 'equals', lib['fullname'], 'V:', version['version'], 'with error:',
+                          Fore.RED+'{:.5f}%'.format(error), Style.RESET_ALL)
+        for key in dct:
+            if key in ['.overall', '.calls']:
+                continue
+            self.compare(dct[key], path+key+'/', guess)
 
     def count(self, path):
         with ThreadPoolExecutor(max_workers=self.threads) as executor:
             for work in self.to_read:
                 executor.submit(self.read_and_accumulate, work[0], work[1], work[2])
-
-        folded = self.fold_dict()
-        if os.path.exists(os.path.basename(path) + '.json'):
-            os.remove(os.path.basename(path) + '.json')
-        with open(os.path.basename(path) + '.json', 'a+') as f:
-            json.dump(folded, f)
-        print('>> Generated', os.path.basename(path) + '.json', 'containing the api call counts')
+        self.remove_create_dump(path, '_unfolded.json', self.amount_dict)
+        folded = self.fold_dict(copy.deepcopy(self.amount_dict))
+        self.remove_create_dump(path, '_folded.json', folded)
+        shortened = self.shorten_folded(copy.deepcopy(folded))
+        self.remove_create_dump(path, '_shortened.json', shortened)
+        print('>> Generated', os.path.basename(path) + '.json, _unfolded.json, _folded.json, _shortened.json',
+              'containing the api call counts')
+        print('>> Comparing with database...')
+        self.compare(shortened)
         return folded
