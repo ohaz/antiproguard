@@ -18,6 +18,7 @@ class APICounter:
         self.amount_dict = {}
         self.threads = threads
         self.to_read = to_read
+        self.compared = []
         with open('database.json', 'r') as f:
             self.database = json.load(f)
 
@@ -101,6 +102,7 @@ class APICounter:
                     error = abs(100 - (dct['.overall'] * 1.0) / ((version['data']['.overall'] * 1.0) / 100))
                     print(Fore.YELLOW+'Guessing that', path, 'equals', lib['fullname'], 'V:', version['version'], 'with error:',
                           Fore.RED+'{:.5f}%'.format(error), Style.RESET_ALL)
+                    self.compared.append((path, lib, error))
         for key in dct:
             if key in ['.overall', '.calls']:
                 continue
@@ -119,4 +121,5 @@ class APICounter:
               'containing the api call counts')
         print('>> Comparing with database...')
         self.compare(shortened)
+        print(self.compared)
         return folded

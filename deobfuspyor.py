@@ -3,6 +3,7 @@ import os
 import subprocess
 from defusedxml import ElementTree
 from api_counter import APICounter
+from function_comparator import FunctionComparator
 from renamer import Renamer
 from base import find_class_paths_and_iterate
 import base
@@ -44,11 +45,16 @@ def deobfuscate(path):
     if to_read is None:
         return
     api_counter = APICounter(threads, to_read)
-    folded = api_counter.count(path)
+    # TODO ENABLE COUNTING AGAIN
+    # folded = api_counter.count(path)
     # Renaming
     renamer = Renamer(to_read, path)
     # renamer.rename_package(['a', 'b', 'c', 'd', 'e'], ['new1', 'new2', 'new3', 'new4', 'new5'])
     # renamer.rename_function(['new1', 'new2', 'new3', 'new4', 'new5'], 'A', 'b', 'newname')
+
+    comparator = FunctionComparator()
+    signature = comparator.create_function_signature('public', '', 'b', 'Ljava/lang/String;', 'Ljava/lang/String;')
+    comparator.analyze_function_instruction_groups(path, os.path.join('smali', 'a', 'b', 'c', 'd', 'e', 'A.smali'), signature)
 
 
 def main():
