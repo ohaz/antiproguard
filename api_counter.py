@@ -19,8 +19,9 @@ class APICounter:
         self.threads = threads
         self.to_read = to_read
         self.compared = []
+        self.shortened = []
         with open('database.json', 'r') as f:
-            self.database = json.load(f)
+            self.database = json.load(f)['api_counter']
 
     def generate_sub_dict(self, path, key):
         current = self.amount_dict
@@ -115,11 +116,15 @@ class APICounter:
         self.remove_create_dump(path, '_unfolded.json', self.amount_dict)
         folded = self.fold_dict(copy.deepcopy(self.amount_dict))
         self.remove_create_dump(path, '_folded.json', folded)
-        shortened = self.shorten_folded(copy.deepcopy(folded))
-        self.remove_create_dump(path, '_shortened.json', shortened)
+        self.shortened = self.shorten_folded(copy.deepcopy(folded))
+        self.remove_create_dump(path, '_shortened.json', self.shortened)
         print('>> Generated', os.path.basename(path) + '.json, _unfolded.json, _folded.json, _shortened.json',
               'containing the api call counts')
+        return folded
+
+    def count_and_compare(self, path):
+        folded = self.count(path)
         print('>> Comparing with database...')
-        self.compare(shortened)
+        self.compare(self.shortened)
         print(self.compared)
         return folded

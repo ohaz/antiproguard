@@ -65,6 +65,8 @@ class Renamer:
                     f.write(new_content)
 
     def rename_function(self, package, java_class, function, new_name):
+        raise NotImplementedError()
+
         pattern = re.compile(r'\.method\s(public|private|protected)*\s*(static)*\s*([\w\s<>;]*)\((.*)\)(.*)')
         path = os.sep.join(package)
         location = [x for x in self.to_read if x[1] == java_class + '.smali' and x[2] == path]

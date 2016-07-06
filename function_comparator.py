@@ -1,5 +1,6 @@
 import re
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pprint import pprint
 
 __author__ = 'ohaz'
@@ -189,23 +190,53 @@ instruction_groups = {
 
 class FunctionComparator:
 
-    def __init__(self):
-        pass
+    def __init__(self, threads, to_read):
+        self.to_read = to_read
+        self.threads = threads
 
-    def create_function_signature(self, visibility, static, name, params, returntype):
+    def analyze_all(self):
+        ptn = r'.method (.*)'
+        pattern = re.compile(ptn)
+        analyzed = []
+        for work in self.to_read:
+            with open(os.path.join(work[0], work[1]), 'r') as file:
+                content = file.read()
+                for fct_signature in pattern.findall(content):
+                    analyzed.append({'signature': fct_signature, 'file': work[1], 'path': work[2],
+                                     'result_map':
+                                         self.analyze_function_instruction_groups_content(content, fct_signature)})
+        return analyzed
+
+    def analyze_all_in_package(self, package):
+        ptn = r'.method (.*)'
+        pattern = re.compile(ptn)
+        analyzed = []
+        for work in self.to_read:
+            if work[2].startswith(package):
+                with open(os.path.join(work[0], work[1]), 'r') as file:
+                    content = file.read()
+                    for fct_signature in pattern.findall(content):
+                        analyzed.append({'signature': fct_signature, 'file': work[1], 'path': work[2],
+                                         'result_map':
+                                             self.analyze_function_instruction_groups_content(content, fct_signature)})
+        return analyzed
+
+    def create_function_signature(self, visibility, static, name, params, return_type):
         if not static == '':
             static += ' '
-        return '{} {}{}\({}\){}'.format(visibility, static, name, params, returntype)
+        return '{} {}{}\({}\){}'.format(visibility, static, name, params, return_type)
 
     def analyze_function_instruction_groups(self, basepath, path, function_signature):
-        result_map = {key: 0 for key in instruction_groups}
         with open(os.path.join(basepath, path), 'r') as f:
             content = f.read()
-        ptn = r'.method '+function_signature+'\n((?:.*\r?\n)*?).end method'
+            self.analyze_function_instruction_groups_content(content, function_signature)
+
+    def analyze_function_instruction_groups_content(self, content, function_signature):
+        result_map = {key: 0 for key in instruction_groups}
+        ptn = r'.method '+re.escape(function_signature)+'\n((?:.*\r?\n)*?).end method'
         pattern = re.compile(ptn)
 
         for pt in pattern.findall(content):
-            print(pt)
             for line in pt.splitlines():
                 line = line.strip()
                 for key in instruction_groups:
@@ -213,3 +244,16 @@ class FunctionComparator:
                         if line.startswith(instr+' '):
                             result_map[key] += 1
         return result_map
+
+    def fold_by_file(self, analyzed):
+        new_analyzed = {}
+        for a in analyzed:
+            element = new_analyzed.get(os.path.join(a['path'], a['file']))
+            if element:
+                for k, v in a['result_map'].items():
+                    element['result_map'][k] += v
+            else:
+                element = a
+                del element['signature']
+            new_analyzed[os.path.join(a['path'], a['file'])] = element
+        pprint(new_analyzed)

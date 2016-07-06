@@ -5,6 +5,7 @@ __author__ = 'ohaz'
 verbose = False
 
 
+
 def find_class_paths(path):
     class_paths = []
     for f in os.listdir(path):
