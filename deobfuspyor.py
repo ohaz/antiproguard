@@ -11,6 +11,7 @@ import shutil
 import colorama
 from colorama import Fore, Style
 from pprint import pprint
+import json
 
 __author__ = 'ohaz'
 
@@ -55,10 +56,9 @@ def deobfuscate(path):
 
     comparator = FunctionComparator(threads, to_read)
     result_map = comparator.analyze_all()
-    for result in result_map:
-        if sum(result['result_map'].values()) > 20:
-            print(result)
-    signature = comparator.create_function_signature('public', '', 'b', 'Ljava/lang/String;', 'Ljava/lang/String;')
+    folded_map = comparator.fold_by_file(result_map)
+    comparator.compare_to_db(folded_map)
+    # signature = comparator.create_function_signature('public', '', 'b', 'Ljava/lang/String;', 'Ljava/lang/String;')
     # comparator.analyze_function_instruction_groups(path, os.path.join('smali', 'a', 'b', 'c', 'd', 'e', 'A.smali'), signature)
 
 
@@ -71,19 +71,24 @@ def analyze(path):
     if to_read is None:
         return
 
-    #api_counter = APICounter(threads, to_read)
-    #folded = api_counter.count(path)
-    #shortened = api_counter.shortened
+    api_counter = APICounter(threads, to_read)
+    folded = api_counter.count(path)
+    shortened = api_counter.shortened
     package_to_analyze = input('Name of the Package to analyze (divided by .):')
     package_to_analyze = package_to_analyze.replace('.', os.sep)
 
     comparator = FunctionComparator(threads, to_read)
     result_map = comparator.analyze_all_in_package(package_to_analyze)
-    comparator.fold_by_file(result_map)
-    #for result in result_map:
-    #    pprint(result)
-        #if sum(result['result_map'].values()) > 20:
-        #    print(result)
+    folded_map = comparator.fold_by_file(result_map)
+    for k, v in folded_map.items():
+        package = v['path'].replace(os.sep, '.')
+        jclass = v['file'][:-6]
+        if package+'.'+jclass not in base.database['function_comparator']:
+            base.database['function_comparator'][package+'.'+jclass] = {
+                'map': v['result_map'],
+                'package': package,
+                'class': jclass
+            }
 
 
 def main():
@@ -102,42 +107,56 @@ def main():
 
     colorama.init()
 
-    output_folder = os.path.basename(args.apk)[:-4]
-    apk_path = os.path.abspath(args.apk)
+    apk_paths = os.path.abspath(args.apk)
     threads = args.threads
     if isinstance(threads, list):
         threads = threads[0]
     args.skip_decompile = True if args.skip_all else args.skip_decompile
     args.skip_build = True if args.skip_all else args.skip_build
 
-    print(Fore.GREEN+'> Starting deobfuscation process for:', apk_path)
-    print('---------------------------------------------')
-    print(Style.RESET_ALL)
-    if not args.keep and os.path.exists(output_folder):
-        print(Fore.RED+'>> Removing old output folder')
-        print(Style.RESET_ALL)
-        shutil.rmtree(output_folder)
-    if not args.skip_decompile:
-        run(['java', '-jar', 'apktool.jar', 'd', apk_path])
-        print(Fore.BLUE+'>> Decompiling to smali code done')
-    print(Style.RESET_ALL)
-    if not args.analyze:
-        deobfuscate(os.path.join(os.getcwd(), output_folder))
-        print(Fore.GREEN+'---------------------------------------------')
-        print('Done deobfuscating...'+Style.RESET_ALL)
-        if not args.skip_build:
-            print('Rebuilding APK')
-            run(['java', '-jar', 'apktool.jar', 'b', os.path.join(os.getcwd(), output_folder), '-o', apk_path+'_new.apk'])
-            if args.verbose:
-                base.verbose = True
-                print(Fore.LIGHTRED_EX+'---------------------------------------------')
-                print('Don\'t forget to sign your apk with the following commands:')
-                print('keytool -genkey -v -keystore my-release-key.keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000')
-                print('jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-release-key.keystore my_application.apk alias_name')
-                print('jarsigner -verify -verbose -certs my_application.apk')
-                print('zipalign -v 4 your_project_name-unaligned.apk your_project_name.apk')
+    print(Fore.LIGHTGREEN_EX+' Reading config file / database')
+    with open('database.json', 'r') as f:
+        base.database = json.load(f)
+
+    if os.path.isdir(apk_paths):
+        apks = [x for x in os.listdir(apk_paths) if x.endswith('.apk')]
     else:
-        analyze(os.path.join(os.getcwd(), output_folder))
+        apks = [apk_paths]
+
+    for apk in apks:
+        output_folder = os.path.basename(apk)[:-4]
+
+        print(Fore.GREEN+'> Starting deobfuscation process for:', apk)
+        print('---------------------------------------------')
+        print(Style.RESET_ALL)
+        if not args.keep and os.path.exists(output_folder):
+            print(Fore.RED+'>> Removing old output folder')
+            print(Style.RESET_ALL)
+            shutil.rmtree(output_folder)
+        if not args.skip_decompile:
+            run(['java', '-jar', 'apktool.jar', 'd', apk])
+            print(Fore.BLUE+'>> Decompiling to smali code done')
+        print(Style.RESET_ALL)
+        if not args.analyze:
+            deobfuscate(os.path.join(os.getcwd(), output_folder))
+            print(Fore.GREEN+'---------------------------------------------')
+            print('Done deobfuscating...'+Style.RESET_ALL)
+            if not args.skip_build:
+                print('Rebuilding APK')
+                run(['java', '-jar', 'apktool.jar', 'b', os.path.join(os.getcwd(), output_folder), '-o', apk+'_new.apk'])
+                if args.verbose:
+                    base.verbose = True
+                    print(Fore.LIGHTRED_EX+'---------------------------------------------')
+                    print('Don\'t forget to sign your apk with the following commands:')
+                    print('keytool -genkey -v -keystore my-release-key.keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000')
+                    print('jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-release-key.keystore my_application.apk alias_name')
+                    print('jarsigner -verify -verbose -certs my_application.apk')
+                    print('zipalign -v 4 your_project_name-unaligned.apk your_project_name.apk')
+        else:
+            analyze(os.path.join(os.getcwd(), output_folder))
+            os.remove('database.json')
+            with open('database.json', 'a+') as f:
+                json.dump(base.database, f, indent=2)
 
 
 if __name__ == '__main__':

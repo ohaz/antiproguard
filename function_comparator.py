@@ -1,7 +1,7 @@
 import re
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pprint import pprint
+import base
 
 __author__ = 'ohaz'
 
@@ -193,18 +193,15 @@ class FunctionComparator:
     def __init__(self, threads, to_read):
         self.to_read = to_read
         self.threads = threads
+        self.database = base.database['function_comparator']
+        self.COMPARE_LIMIT = 20
 
     def analyze_all(self):
         ptn = r'.method (.*)'
         pattern = re.compile(ptn)
         analyzed = []
         for work in self.to_read:
-            with open(os.path.join(work[0], work[1]), 'r') as file:
-                content = file.read()
-                for fct_signature in pattern.findall(content):
-                    analyzed.append({'signature': fct_signature, 'file': work[1], 'path': work[2],
-                                     'result_map':
-                                         self.analyze_function_instruction_groups_content(content, fct_signature)})
+            analyzed.extend(self.analyze_file(work, pattern))
         return analyzed
 
     def analyze_all_in_package(self, package):
@@ -213,12 +210,17 @@ class FunctionComparator:
         analyzed = []
         for work in self.to_read:
             if work[2].startswith(package):
-                with open(os.path.join(work[0], work[1]), 'r') as file:
-                    content = file.read()
-                    for fct_signature in pattern.findall(content):
-                        analyzed.append({'signature': fct_signature, 'file': work[1], 'path': work[2],
-                                         'result_map':
-                                             self.analyze_function_instruction_groups_content(content, fct_signature)})
+                analyzed.extend(self.analyze_file(work, pattern))
+        return analyzed
+
+    def analyze_file(self, work, pattern):
+        analyzed = []
+        with open(os.path.join(work[0], work[1]), 'r') as file:
+            content = file.read()
+            for fct_signature in pattern.findall(content):
+                analyzed.append({'signature': fct_signature, 'file': work[1], 'path': work[2],
+                                 'result_map':
+                                     self.analyze_function_instruction_groups_content(content, fct_signature)})
         return analyzed
 
     def create_function_signature(self, visibility, static, name, params, return_type):
@@ -254,6 +256,29 @@ class FunctionComparator:
                     element['result_map'][k] += v
             else:
                 element = a
-                del element['signature']
             new_analyzed[os.path.join(a['path'], a['file'])] = element
-        pprint(new_analyzed)
+            if 'signature' in new_analyzed[os.path.join(a['path'], a['file'])]:
+                del new_analyzed[os.path.join(a['path'], a['file'])]['signature']
+        return new_analyzed
+
+    def compare_to_db(self, analyzed):
+        folders = {}
+        for data_key, data_value in self.database.items():
+            folders_key = '.'.join((data_key.split('.'))[:-1])
+            if folders_key not in folders:
+                folders[folders_key] = {'found': 0, 'file_amount': 0}
+            folders[folders_key]['file_amount'] += 1
+            for k, v in analyzed.items():
+                if self.compare_map(data_value['map'], v['result_map']):
+                    folders[folders_key]['found'] += 1
+        pprint(folders)
+
+    def compare_map(self, map1, map2):
+        result = True
+        for k1, v1 in map1.items():
+            if not v1 == map2[k1]:
+                result = False
+
+        if sum(map1.values()) < self.COMPARE_LIMIT:
+            return False
+        return result

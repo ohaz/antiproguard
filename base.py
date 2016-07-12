@@ -4,6 +4,7 @@ __author__ = 'ohaz'
 
 verbose = False
 
+database = None
 
 
 def find_class_paths(path):

@@ -6,6 +6,7 @@ import json
 from pprint import pprint
 import copy
 from colorama import Fore, Style
+import base
 
 __author__ = 'ohaz'
 
@@ -20,8 +21,7 @@ class APICounter:
         self.to_read = to_read
         self.compared = []
         self.shortened = []
-        with open('database.json', 'r') as f:
-            self.database = json.load(f)['api_counter']
+        self.database = base.database['api_counter']
 
     def generate_sub_dict(self, path, key):
         current = self.amount_dict
