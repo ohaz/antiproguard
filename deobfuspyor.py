@@ -3,6 +3,7 @@ import os
 import subprocess
 from defusedxml import ElementTree
 from api_counter import APICounter
+from analyzer import Analyzer
 from function_comparator import FunctionComparator
 from renamer import Renamer
 from base import find_class_paths_and_iterate
@@ -12,6 +13,7 @@ import colorama
 from colorama import Fore, Style
 from pprint import pprint
 import json
+import database
 
 __author__ = 'ohaz'
 
@@ -48,7 +50,9 @@ def deobfuscate(path):
         return
     api_counter = APICounter(threads, to_read)
     # TODO ENABLE COUNTING AGAIN
-    # folded = api_counter.count_and_compare(path)
+    folded = api_counter.count_and_compare(path)
+    shortened = api_counter.shortened
+    api_counter_compared = api_counter.compared
     # Renaming
     renamer = Renamer(to_read, path)
     # renamer.rename_package(['a', 'b', 'c', 'd', 'e'], ['new1', 'new2', 'new3', 'new4', 'new5'])
@@ -57,7 +61,10 @@ def deobfuscate(path):
     comparator = FunctionComparator(threads, to_read)
     result_map = comparator.analyze_all()
     folded_map = comparator.fold_by_file(result_map)
-    comparator.compare_to_db(folded_map)
+    function_comparator_compared = comparator.compare_to_db(folded_map)
+    analyzer = Analyzer()
+    analyzer.analyze(api_counter_compared, function_comparator_compared)
+
     # signature = comparator.create_function_signature('public', '', 'b', 'Ljava/lang/String;', 'Ljava/lang/String;')
     # comparator.analyze_function_instruction_groups(path, os.path.join('smali', 'a', 'b', 'c', 'd', 'e', 'A.smali'), signature)
 
@@ -71,24 +78,55 @@ def analyze(path):
     if to_read is None:
         return
 
+    #package_to_analyze = input('Name of the Package to analyze (divided by .):')
+    #package_to_analyze = package_to_analyze.replace('.', os.sep)
+
+    packages_to_search = ['org.bouncycastle', 'net.java.otr4j.crypto', 'org.sqlite', 'android.support.v4', 'android.support.v7', 'android.support.v13']
+    packages_to_search = [x.split('.') for x in packages_to_search]
+
     api_counter = APICounter(threads, to_read)
     folded = api_counter.count(path)
     shortened = api_counter.shortened
-    package_to_analyze = input('Name of the Package to analyze (divided by .):')
-    package_to_analyze = package_to_analyze.replace('.', os.sep)
+    already_in_db = []
+    for package in packages_to_search:
+        current = shortened
+        for e in package:
+            if e in current:
+                current = current[e]
+            else: break
+        else:
+            # Searched for a package and found it!
+            lib = database.session.query(database.Library).filter(database.Library.base_package == '.'.join(package)).first()
+            if not lib:
+                lib = database.Library(name='.'.join(package), base_package='.'.join(package))
+                database.session.add(lib)
+            in_db = False
+            for version in lib.versions:
+                if version.api_calls == current['.overall']:
+                    print('Already in DB:', lib, version)
+                    already_in_db.append((str(lib), str(version)))
+                    in_db = True
+            if not in_db:
+                version = database.LibraryVersion(library=lib, api_calls=current['.overall'])
+                database.session.add(version)
+        database.session.commit()
+    return already_in_db
 
-    comparator = FunctionComparator(threads, to_read)
-    result_map = comparator.analyze_all_in_package(package_to_analyze)
-    folded_map = comparator.fold_by_file(result_map)
-    for k, v in folded_map.items():
-        package = v['path'].replace(os.sep, '.')
-        jclass = v['file'][:-6]
-        if package+'.'+jclass not in base.database['function_comparator']:
-            base.database['function_comparator'][package+'.'+jclass] = {
-                'map': v['result_map'],
-                'package': package,
-                'class': jclass
-            }
+
+
+
+    #comparator = FunctionComparator(threads, to_read)
+    #result_map = comparator.analyze_all_in_package(package_to_analyze)
+    #folded_map = comparator.fold_by_file(result_map)
+    #for k, v in folded_map.items():
+    #    package = v['path'].replace(os.sep, '.')
+    #    jclass = v['file'][:-6]
+    #    if package+'.'+jclass not in base.database['function_comparator']:
+    #        base.database['function_comparator'][package+'.'+jclass] = {
+    #            'map': v['result_map'],
+    #            'package': package,
+    #            'class': jclass
+    #        }
 
 
 def main():
@@ -114,15 +152,17 @@ def main():
     args.skip_decompile = True if args.skip_all else args.skip_decompile
     args.skip_build = True if args.skip_all else args.skip_build
 
-    print(Fore.LIGHTGREEN_EX+' Reading config file / database')
-    with open('database.json', 'r') as f:
-        base.database = json.load(f)
+    # print(Fore.LIGHTGREEN_EX+' Reading config file / database')
+    # with open('database.json', 'r') as f:
+    #     base.database = json.load(f)
 
     if os.path.isdir(apk_paths):
-        apks = [x for x in os.listdir(apk_paths) if x.endswith('.apk')]
+        apks = [os.path.join(apk_paths, x) for x in os.listdir(apk_paths) if x.endswith('.apk')]
     else:
         apks = [apk_paths]
 
+    base.verbose = args.verbose
+    already_in_db = []
     for apk in apks:
         output_folder = os.path.basename(apk)[:-4]
 
@@ -153,11 +193,20 @@ def main():
                     print('jarsigner -verify -verbose -certs my_application.apk')
                     print('zipalign -v 4 your_project_name-unaligned.apk your_project_name.apk')
         else:
-            analyze(os.path.join(os.getcwd(), output_folder))
-            os.remove('database.json')
-            with open('database.json', 'a+') as f:
-                json.dump(base.database, f, indent=2)
+            already_in_db.extend(analyze(os.path.join(os.getcwd(), output_folder)))
 
+            # os.remove('database.json')
+            # with open('database.json', 'a+') as f:
+            #    json.dump(base.database, f, indent=2)
+
+        if not args.keep and os.path.exists(output_folder):
+            print(Fore.RED+'>> Removing output folder')
+            print(Style.RESET_ALL)
+            shutil.rmtree(output_folder)
+    if args.analyze:
+        print(Fore.GREEN)
+        pprint(already_in_db)
+        print(Style.RESET_ALL)
 
 if __name__ == '__main__':
     main()

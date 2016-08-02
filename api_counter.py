@@ -21,7 +21,7 @@ class APICounter:
         self.to_read = to_read
         self.compared = []
         self.shortened = []
-        self.database = base.database['api_counter']
+        # self.database = base.database['api_counter']
 
     def generate_sub_dict(self, path, key):
         current = self.amount_dict
@@ -98,27 +98,27 @@ class APICounter:
         for lib_key in self.database:
             lib = self.database[lib_key]
             for version in lib['versions']:
-                if version['data']['.overall'] in range(max(0, int(dct['.overall'] * 0.975)), int(dct['.overall'] * 1.05)):
+                if version['data']['.overall'] in range(max(0, int(dct['.overall'] * 0.975)), int(dct['.overall'] * 1.25)):
                     guess = lib
                     error = abs(100 - (dct['.overall'] * 1.0) / ((version['data']['.overall'] * 1.0) / 100))
-                    print(Fore.YELLOW+'Guessing that', path, 'equals', lib['fullname'], 'V:', version['version'], 'with error:',
-                          Fore.RED+'{:.5f}%'.format(error), Style.RESET_ALL)
-                    self.compared.append((path, lib, error))
+                    # print(Fore.YELLOW+'Guessing that', path, 'equals', lib['fullname'], 'V:', version['version'], 'with error:',
+                    #       Fore.RED+'{:.5f}%'.format(error), Style.RESET_ALL)
+                    self.compared.append((path[:-1], lib, error))
         for key in dct:
             if key in ['.overall', '.calls']:
                 continue
-            self.compare(dct[key], path+key+'/', guess)
+            self.compare(dct[key], path+key+'.', guess)
 
     def count(self, path):
         with ThreadPoolExecutor(max_workers=self.threads) as executor:
             for work in self.to_read:
                 executor.submit(self.read_and_accumulate, work[0], work[1], work[2])
-        self.remove_create_dump(path, '_unfolded.json', self.amount_dict)
+        if base.verbose: self.remove_create_dump(path, '_unfolded.json', self.amount_dict)
         folded = self.fold_dict(copy.deepcopy(self.amount_dict))
-        self.remove_create_dump(path, '_folded.json', folded)
+        if base.verbose: self.remove_create_dump(path, '_folded.json', folded)
         self.shortened = self.shorten_folded(copy.deepcopy(folded))
-        self.remove_create_dump(path, '_shortened.json', self.shortened)
-        print('>> Generated', os.path.basename(path) + '.json, _unfolded.json, _folded.json, _shortened.json',
+        if base.verbose: self.remove_create_dump(path, '_shortened.json', self.shortened)
+        if base.verbose: print('>> Generated', os.path.basename(path) + '.json, _unfolded.json, _folded.json, _shortened.json',
               'containing the api call counts')
         return folded
 
@@ -126,5 +126,4 @@ class APICounter:
         folded = self.count(path)
         print('>> Comparing with database...')
         self.compare(self.shortened)
-        print(self.compared)
         return folded

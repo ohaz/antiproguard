@@ -263,15 +263,34 @@ class FunctionComparator:
 
     def compare_to_db(self, analyzed):
         folders = {}
+        vpaths = {}
         for data_key, data_value in self.database.items():
             folders_key = '.'.join((data_key.split('.'))[:-1])
             if folders_key not in folders:
-                folders[folders_key] = {'found': 0, 'file_amount': 0}
+                folders[folders_key] = {'found': {}, 'file_amount': 0, 'folder': ''}
             folders[folders_key]['file_amount'] += 1
             for k, v in analyzed.items():
                 if self.compare_map(data_value['map'], v['result_map']):
-                    folders[folders_key]['found'] += 1
-        pprint(folders)
+                    if v['path'] not in folders[folders_key]['found']:
+                        folders[folders_key]['found'][v['path']] = 0
+                    folders[folders_key]['found'][v['path']] += 1
+                    vpaths[v['path']] = vpaths.get(v['path'], 0) + 1
+            highest = (None, -1)
+            for found_key, found_value in folders[folders_key]['found'].items():
+                if found_value > highest[1]:
+                    highest = (found_key, found_value)
+            folders[folders_key]['highest'] = {'path': highest[0], 'found': highest[1]}
+        errors = self.calculate_errors(folders)
+        pprint(vpaths)
+        exit()
+        return errors
+
+    def calculate_errors(self, folders):
+        result = {}
+        for k, v in folders.items():
+            error = 100 * abs(1 - ((v['highest']['found'] * 1.0) / (v['file_amount'] * 1.0)))
+            result[k] = {'file_amount': v['file_amount'], 'found': v['highest']['found'], 'path': v['highest']['path'], 'error': error}
+        return result
 
     def compare_map(self, map1, map2):
         result = True
