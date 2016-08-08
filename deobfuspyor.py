@@ -6,7 +6,7 @@ from api_counter import APICounter
 from analyzer import Analyzer
 from function_comparator import FunctionComparator
 from renamer import Renamer
-from base import find_class_paths_and_iterate
+from base import find_class_paths_and_iterate, find_class_paths
 import base
 import shutil
 import colorama
@@ -14,6 +14,7 @@ from colorama import Fore, Style
 from pprint import pprint
 import json
 import database
+from apk import File, Package
 
 __author__ = 'ohaz'
 
@@ -112,9 +113,6 @@ def analyze(path):
         database.session.commit()
     return already_in_db
 
-
-
-
     #comparator = FunctionComparator(threads, to_read)
     #result_map = comparator.analyze_all_in_package(package_to_analyze)
     #folded_map = comparator.fold_by_file(result_map)
@@ -127,6 +125,54 @@ def analyze(path):
     #            'package': package,
     #            'class': jclass
     #        }
+
+
+def recursive_iterate(parent):
+    for f in os.listdir(parent.get_full_path()):
+        if f.endswith('.smali'):
+            in_sub_tree = True
+            file = File(f, parent)
+            parent.add_child_file(file)
+        else:
+            p = Package(f, parent)
+            parent.add_child_package(p)
+            recursive_iterate(p)
+
+
+def new_iterate(path):
+    class_paths = find_class_paths(path)
+    base.dot_id_counter = 0
+    root = Package('ROOT', parent=None, special=True)
+    for folder in class_paths:
+        special = Package(folder, root, True)
+        special.set_special_path(os.path.join(path, folder))
+        root.add_child_package(special)
+        recursive_iterate(special)
+    root.iterate_end_of_packages()
+    return root
+
+
+def new_analyze(path):
+    android_manifest = ElementTree.parse(os.path.join(path, 'AndroidManifest.xml'))
+    root = android_manifest.getroot()
+    mains = search_mains(root)
+    print('>> Main activities found:', mains)
+
+    root = new_iterate(path)
+
+    from graphviz import Digraph
+    dot = Digraph()
+    root.graph(dot, None, True)
+    # dot.render('OUT.png', view=True)
+    with open('out.dot', 'w+') as f:
+        f.write(dot.source)
+
+    node = root.child_packages[0]
+    for child in node.child_packages:
+        if child.name == 'de':
+            for file in child.get_files():
+                file.generate_basic_blocks()
+                file.generate_ngrams(n=2, intersect=False)
 
 
 def main():
@@ -193,7 +239,8 @@ def main():
                     print('jarsigner -verify -verbose -certs my_application.apk')
                     print('zipalign -v 4 your_project_name-unaligned.apk your_project_name.apk')
         else:
-            already_in_db.extend(analyze(os.path.join(os.getcwd(), output_folder)))
+            new_analyze(os.path.join(os.getcwd(), output_folder))
+            # TODO: already_in_db.extend(analyze(os.path.join(os.getcwd(), output_folder)))
 
             # os.remove('database.json')
             # with open('database.json', 'a+') as f:

@@ -247,6 +247,24 @@ class FunctionComparator:
                             result_map[key] += 1
         return result_map
 
+    def analyze_function_instruction_groups_content_ngram(self, content, function_signature, n):
+        result_map = {key: 0 for key in instruction_groups}
+        ptn = r'.method ' + re.escape(function_signature) + '\n((?:.*\r?\n)*?).end method'
+        pattern = re.compile(ptn)
+
+        lines = []
+
+        for pt in pattern.findall(content):
+            for line in pt.splitlines():
+                line = line.strip()
+                lines.append(line)
+        for i, l in enumerate(lines):
+            for key in instruction_groups:
+                for instr in instruction_groups[key]:
+                    if line.startswith(instr + ' '):
+                        result_map[key] += 1
+        return result_map
+
     def fold_by_file(self, analyzed):
         new_analyzed = {}
         for a in analyzed:
