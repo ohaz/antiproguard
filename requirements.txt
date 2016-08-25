@@ -2,3 +2,4 @@ defusedxml == 0.4.1
 colorama
 sqlalchemy
 sqlalchemy_utils
+simhash

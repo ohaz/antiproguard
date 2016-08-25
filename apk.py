@@ -2,10 +2,12 @@ import os
 from pprint import pprint
 import base
 import re
+from elsim import SimHash
+import apkdb
 
 __author__ = 'ohaz'
 
-instruction_groups = {
+instruction_groups_old = {
     'neg-int': 'CN',
     'not-int': 'CN',
     'neg-long': 'CN',
@@ -29,6 +31,7 @@ instruction_groups = {
     'int-to-short': 'CN',
     'add-int': 'MT',
     'sub-int': 'MT',
+    'rsub-int': 'MT',
     'mul-int': 'MT',
     'div-int': 'MT',
     'rem-int': 'MT',
@@ -119,6 +122,8 @@ instruction_groups = {
     'if-gez': 'CP',
     'if-gtz': 'CP',
     'if-lez': 'CP',
+    'packed-switch': 'CP',
+    'sparse-switch': 'CP',
     'goto': 'GO',
     'throw': 'GO',
     'array-length': 'AR',
@@ -159,12 +164,173 @@ instruction_groups = {
     'move-object': 'MV',
     'move-result': 'MV',
     'move-result-object': 'MV',
-    'move-exception': 'MV'
+    'move-exception': 'MV',
+    'nop': 'NP'
 }
+
+instruction_groups = [
+    'neg-int',
+    'not-int',
+    'neg-long',
+    'not-long',
+    'neg-float',
+    'neg-double',
+    'int-to-long',
+    'int-to-float',
+    'int-to-double',
+    'long-to-int',
+    'long-to-float',
+    'long-to-double',
+    'float-to-int',
+    'float-to-long',
+    'float-to-double',
+    'double-to-int',
+    'double-to-long',
+    'double-to-float',
+    'int-to-byte',
+    'int-to-char',
+    'int-to-short',
+    'add-int',
+    'sub-int',
+    'rsub-int',
+    'mul-int',
+    'div-int',
+    'rem-int',
+    'and-int',
+    'or-int',
+    'xor-int',
+    'shl-int',
+    'shr-int',
+    'ushr-int',
+    'add-long',
+    'sub-long',
+    'mul-long',
+    'div-long',
+    'rem-long',
+    'and-long',
+    'or-long',
+    'xor-long',
+    'shl-long',
+    'shr-long',
+    'ushr-long',
+    'add-float',
+    'sub-float',
+    'mul-float',
+    'div-float',
+    'rem-float',
+    'add-double',
+    'sub-double',
+    'mul-double',
+    'div-double',
+    'rem-double',
+    'invoke-virtual',
+    'invoke-super',
+    'invoke-direct',
+    'invoke-static',
+    'invoke-interface',
+    'invoke-interface-range',
+    'invoke-direct-empty',
+    'execute-inline',
+    'invoke-virtual-quick',
+    'invoke-super-quick',
+    'sget-wide',
+    'sget-object',
+    'sget-boolean',
+    'sget-byte',
+    'sget-char',
+    'sget-short',
+    'sget',
+    'sput-wide',
+    'sput-object',
+    'sput-boolean',
+    'sput-byte',
+    'sput-char',
+    'sput-short',
+    'sput',
+    'iget-wide',
+    'iget-object',
+    'iget-boolean',
+    'iget-byte',
+    'iget-char',
+    'iget-short',
+    'iget',
+    'iput-wide',
+    'iput-object',
+    'iput-boolean',
+    'iput-byte',
+    'iput-char',
+    'iput-short',
+    'iget-wide-quick',
+    'iget-object-quick',
+    'iput-quick',
+    'iput-wide-quick',
+    'iput-object-quick',
+    'iput',
+    'cmpl-float',
+    'cmpg-float',
+    'cmpl-double',
+    'cmpg-double',
+    'cmp-long',
+    'if-eq',
+    'if-ne',
+    'if-lt',
+    'if-ge',
+    'if-gt',
+    'if-le',
+    'if-eqz',
+    'if-nez',
+    'if-ltz',
+    'if-gez',
+    'if-gtz',
+    'if-lez',
+    'packed-switch',
+    'sparse-switch',
+    'goto',
+    'throw',
+    'array-length',
+    'new-array',
+    'filled-new-array',
+    'filled-new-array-range',
+    'fill-array-data',
+    'aget-wide',
+    'aget-object',
+    'aget-boolean',
+    'aget-byte',
+    'aget-char',
+    'aget-short',
+    'aget',
+    'aput-wide',
+    'aput-object',
+    'aput-boolean',
+    'aput-byte',
+    'aput-char',
+    'aput-short',
+    'aput',
+    'check-cast',
+    'instance-of',
+    'new-instance',
+    'monitor-enter',
+    'monitor-exit',
+    'const-wide',
+    'const-string',
+    'const-string-jumbo',
+    'const-class',
+    'const',
+    'return-void',
+    'return-wide',
+    'return-object',
+    'return',
+    'move-wide',
+    'move-object',
+    'move-result',
+    'move-result-object',
+    'move-exception',
+    'move',
+    'nop'
+]
 
 
 class Package:
-
     def __init__(self, name, parent=None, special=False):
         """
         Init Method for a java package folder
@@ -182,6 +348,15 @@ class Package:
         self._special_path = ''
         self.is_eop = False
 
+    def save_to_db(self):
+        lib = apkdb.session.query(apkdb.Library).filter(apkdb.Library.base_package == self.get_full_package()).first()
+        if lib is None:
+            lib = apkdb.Library(name=self.get_full_package(), base_package=self.get_full_package())
+            apkdb.session.add(lib)
+        for f in self.get_files():
+            f.save_to_db(lib)
+        apkdb.session.commit()
+
     def iterate_end_of_packages(self):
         """
         Finds the first package that contains a file
@@ -192,6 +367,19 @@ class Package:
             return
         for child in self.child_packages:
             child.iterate_end_of_packages()
+
+    def find_eops(self):
+        """
+        Returns all EOPs in the children of this node
+        :return: List of EOPs
+        """
+        if self.is_eop:
+            return [self]
+        else:
+            l = []
+            for child in self.child_packages:
+                l.extend(child.find_eops())
+            return l
 
     def get_files(self):
         """
@@ -241,13 +429,17 @@ class Package:
         shorter = 0
         really_long = 0
         for p in packages:
-            if len(p) < 3:
+            if len(p) < 2:
                 shorter += 1
             elif len(p) > 4:
                 really_long += 1
-        if really_long > (0.5 * len(packages)):
-            shorter = max(0,shorter-really_long)
-        return shorter*1.0 / (len(packages)*1.0)
+        # if really_long > (0.5 * len(packages)):
+        #     shorter = max(0, shorter - really_long)
+        # return shorter * 1.0 / (len(packages) * 1.0)
+        if shorter >= 1:
+            return 1.0
+        else:
+            return 0.0
 
     def get_full_path(self):
         """
@@ -275,9 +467,20 @@ class Package:
         :return: dot-style path representation
         """
         parent = ''
-        if not self.parent.special:
+        if self.parent is not None and not self.parent.special:
             parent = self.parent.get_full_package() + '.'
         return parent + self.name
+
+    def get_full_sub_package(self):
+        """
+        Java-like path/package presentation, using dots instead of os seperators
+        leaves out the base package
+        :return: dot-style path representation
+        """
+        if self.parent.is_eop:
+            return self.name
+        else:
+            return self.parent.get_full_package() + '.' + self.name
 
     def pprint(self):
         """
@@ -313,7 +516,6 @@ class Package:
 
 
 class File:
-
     def __init__(self, name, parent):
         """
         Class representing a Smali Code File
@@ -326,6 +528,19 @@ class File:
         base.dot_id_counter += 1
         self.function_pattern = re.compile(r'\.method (.*)\n((?:.*\r?\n)*?)\.end method')
         self.methods = []
+
+    def save_to_db(self, lib):
+        parent = apkdb.session.query(apkdb.Package).filter(apkdb.Package.library == lib,
+                                                           apkdb.Package.name == self.parent.get_full_sub_package()).first()
+        if parent is None:
+            parent = apkdb.Package(library=lib, name=self.parent.get_full_sub_package())
+            apkdb.session.add(parent)
+        file = apkdb.session.query(apkdb.File).filter(apkdb.File.package == parent, apkdb.File.name == self.get_class_name()).first()
+        if file is None:
+            file = apkdb.File(package=parent, name=self.get_class_name())
+            apkdb.session.add(file)
+        for method in self.methods:
+            method.save_to_db(file)
 
     def get_path(self):
         """
@@ -355,6 +570,17 @@ class File:
         :return: dot-style path representation
         """
         return '.'.join([self.parent.get_full_package(), self.get_class_name()])
+
+    def get_full_sub_package(self):
+        """
+        Java-like path/package presentation, using dots instead of os seperators
+        leaves out the base package
+        :return: dot-style path representation
+        """
+        if self.parent.is_eop:
+            return self.name
+        else:
+            return self.parent.get_full_package() + '.' + self.get_class_name()
 
     def is_obfuscated(self):
         """
@@ -387,7 +613,7 @@ class File:
         for method in methods:
             method.generate_basic_blocks()
 
-    def generate_ngrams(self, n=2, intersect=True):
+    def generate_ngrams(self, n=3, intersect=False):
         """
         Generates the n-grams for all methods in this file
         :param n: the length of a gram
@@ -399,6 +625,13 @@ class File:
             methods = self.generate_methods()
         for method in methods:
             method.generate_ngrams(n, intersect)
+
+    def generate_sim_hashes(self):
+        methods = self.methods
+        if len(methods) == 0:
+            methods = self.generate_methods()
+        for method in methods:
+            method.elsim_similarity_instructions()
 
     def pprint(self):
         """
@@ -421,7 +654,6 @@ class File:
 
 
 class Method:
-
     def __init__(self, file, signature, instructions):
         """
         Representation of a method
@@ -434,6 +666,16 @@ class Method:
         self.instructions = instructions
         self.basic_blocks = []
         self.ngrams = []
+        self.elsim_ngram_hash = None
+        self.elsim_instructions_hash = None
+
+    def get_name(self):
+        return self.signature
+
+    def set_name(self, name):
+        self.signature = name
+
+    name = property(get_name, set_name)
 
     def instr_stripped_gen(self):
         """
@@ -444,6 +686,41 @@ class Method:
 
     instr_stripped = property(instr_stripped_gen)
 
+    def get_params(self):
+        prims = ['Z', 'B', 'S', 'C', 'I', 'J', 'F', 'D']
+        r = re.compile(r'.*\((.*)\).*')
+        p = r.search(self.signature).group(1)
+        params = []
+        current = ''
+        in_obj = False
+        for c in p:
+            current += c
+            if c in prims and not in_obj:
+                params.append(current)
+                current = ''
+            if in_obj and c == ';':
+                params.append(current)
+                current = ''
+                in_obj = False
+            if c == 'L':
+                in_obj = True
+        return params
+
+    def save_to_db(self, file):
+        if 'constructor ' not in self.signature and 'abstract ' not in self.signature:
+            meth = apkdb.session.query(apkdb.Method).filter(apkdb.Method.file == file, apkdb.Method.signature == self.signature).first()
+            if meth is None:
+                meth = apkdb.Method(file=file, signature=self.signature)
+                apkdb.session.add(meth)
+            meth_version = apkdb.MethodVersion(method=meth, elsim_instr_hash=str(self.elsim_similarity_instructions()))
+            apkdb.session.add(meth_version)
+            for ngram in self.ngrams:
+                if len(ngram) == 2:
+                    ngr = apkdb.TwoGram(method_version=meth_version, one=ngram[0], two=ngram[1])
+                elif len(ngram) == 3:
+                    ngr = apkdb.ThreeGram(method_version=meth_version, one=ngram[0], two=ngram[1], three=ngram[2])
+                apkdb.session.add(ngr)
+
     def pprint(self):
         """
         Prettyprints this method
@@ -451,24 +728,34 @@ class Method:
         """
         print(self.signature, 'in', self.file.name)
 
-    def generate_ngrams(self, n=2, intersect=True):
+    def generate_ngrams_old(self, n=2, intersect=True):
         """
         Generates n-grams for this method.
         :param n: the length of a gram
         :param intersect: indicates whether n-grams should have intersections (ABCD -> AB, BC, CD or AB, CD)
         :return: void
         """
-        print('METHOD', self.signature, 'in class', self.file.name)
         in_work = []
         i = 0
+        in_annotation = False
         for instr in self.instr_stripped:
+            if in_annotation:
+                if instr.startswith('.end annotation'):
+                    in_annotation = False
+                continue
             found = False
-            for k in instruction_groups:
+            for k in instruction_groups_old:
                 if instr.startswith(k):
                     found = True
             if not found:
-                if not instr.startswith('.') and not instr.startswith('0x') and not instr.startswith(':'):
+                if not instr.startswith('.') and not instr.startswith('0x') and not instr.startswith(':') \
+                        and not instr.startswith('#') and not instr.startswith('-0x'):
                     print(instr)
+                    print(self.file.name)
+                    print(self.file.get_full_package())
+                    exit()
+                if instr.startswith('.annotation'):
+                    in_annotation = True
                 continue
             if intersect:
                 in_work.append(list())
@@ -477,22 +764,83 @@ class Method:
             i += 1
             if len(in_work[0]) >= n:
                 self.ngrams.append(tuple(in_work.pop(0)))
-            for k, v in instruction_groups.items():
-                if instr.startswith(k+' ') or instr.startswith(k+'/') or instr == k:
+            for k, v in instruction_groups_old.items():
+                if instr.startswith(k + ' ') or instr.startswith(k + '/') or instr.startswith(k + '-') \
+                        or instr == k:
                     for ngram in in_work:
                         ngram.append(v)
                     break
             else:
-                print(instr)
+                print('H', instr)
 
-        print(self.ngrams)
+    def generate_ngrams(self, n=3, intersect=False):
+        """
+        Generates n-grams for this method.
+        :param n: the length of a gram
+        :param intersect: indicates whether n-grams should have intersections (ABCD -> AB, BC, CD or AB, CD)
+        :return: void
+        """
+        in_work = []
+        i = 0
+        in_annotation = False
+        for instr in self.instr_stripped:
+            if in_annotation:
+                if instr.startswith('.end annotation'):
+                    in_annotation = False
+                continue
+            found = False
+            for k in instruction_groups:
+                if instr.startswith(k):
+                    found = True
+            if not found:
+                if not instr.startswith('.') and not instr.startswith('0x') and not instr.startswith(':') \
+                        and not instr.startswith('#') and not instr.startswith('-0x'):
+                    print(instr)
+                    print(self.file.name)
+                    print(self.file.get_full_package())
+                    exit()
+                if instr.startswith('.annotation'):
+                    in_annotation = True
+                continue
+            if intersect:
+                in_work.append(list())
+            elif i % n == 0:
+                in_work.append(list())
+            i += 1
+            if len(in_work[0]) >= n:
+                self.ngrams.append(tuple(in_work.pop(0)))
+            for k in instruction_groups:
+                if instr.startswith(k + ' ') or instr.startswith(k + '/') or instr.startswith(k + '-') \
+                        or instr == k:
+                    for ngram in in_work:
+                        ngram.append(k)
+                    break
+            else:
+                print('H', instr)
 
-    def generate_basic_blocks(self):
+    def is_significant(self):
+        if len(self.ngrams) > 2:
+            return True
+        return False
+
+    def elsim_similarity_ngram(self):
+        if self.elsim_ngram_hash is None:
+            self.elsim_ngram_hash = SimHash(self.ngrams)
+        return self.elsim_ngram_hash
+
+    def elsim_similarity_instructions(self):
+        if self.elsim_instructions_hash is None:
+            self.elsim_instructions_hash = SimHash(self.instr_stripped)
+        return self.elsim_instructions_hash
+
+    def generate_basic_blocks(self, invoke_ends=False):
         """
         Generates the basic block structures for this method.
         :return: void
         """
-        enders = ['GO', 'RT', 'invoke-', 'if-']
+        enders = ['return', 'goto', 'throw', 'if-', 'packed-switch', 'sparse-switch']
+        if invoke_ends:
+            enders.append('invoke-')
         starters = [':', '.catch']
         entry = 0
         splits = self.instructions.splitlines()
@@ -501,10 +849,10 @@ class Method:
             i = instr.strip()
             for e in enders:
                 if i.startswith(e):
-                    bb = BasicBlock.new_block(self, splits[entry:key+1], prev)
+                    bb = BasicBlock.new_block(self, splits[entry:key + 1], prev)
                     if bb:
                         self.basic_blocks.append(bb)
-                    entry = key+1
+                    entry = key + 1
                     if prev:
                         prev.next = bb
                     prev = bb
@@ -557,7 +905,6 @@ class Method:
 
 
 class BasicBlock:
-
     def __init__(self, method, instructions, prev_bb, next_bb=None, parents=None, children=None):
         """
         Representation of a basic block.
@@ -591,7 +938,7 @@ class BasicBlock:
             dot.node(str(self.dot_id), 'F: ' + str(self.instructions))
             for c in self.children:
                 dot.edge(str(self.dot_id), str(c.dot_id))
-                c.graph(dot, done+[self.dot_id])
+                c.graph(dot, done + [self.dot_id])
 
     def pprint(self):
         """
@@ -633,6 +980,7 @@ class BasicBlock:
         targets = []
         goto_target = re.compile(r'goto\s(.*)')
         if_target = re.compile(r'if-\w+\s.*,\s(\S*)')
+        switch_target = re.compile(r'packed-switch\s.*,\s(\S*)')
         # TODO: What about catch?
         ll = self.instructions[-1].strip()
         goto_match = goto_target.match(ll)
@@ -641,6 +989,10 @@ class BasicBlock:
         if_match = if_target.match(ll)
         if if_match:
             targets.append(if_match.group(1))
+        switch_match = switch_target.match(ll)
+        if switch_match:
+            # TODO SWITCH CASES ARE BAD
+            pass
         return targets
 
     @classmethod
