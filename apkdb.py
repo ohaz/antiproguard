@@ -7,11 +7,16 @@ import apk
 
 __author__ = 'ohaz'
 
+mysql = True
+
 echo = False
 if __name__ == '__main__':
     echo = True
 
-engine = create_engine('sqlite:///apkdb.sqlite', echo=echo)
+if mysql:
+    engine = create_engine('mysql+pymysql://deobfuspyor:deob@localhost/deobfuspyor')
+else:
+    engine = create_engine('sqlite:///apkdb.sqlite', echo=echo)
 
 Base = declarative_base()
 
@@ -20,8 +25,8 @@ class Library(Base):
     __tablename__ = 'library'
 
     id = Column(Integer, primary_key=True)
-    name = Column(String)
-    base_package = Column(String)
+    name = Column(String(200))
+    base_package = Column(String(200))
     packages = relationship('Package', back_populates='library')
 
     def __repr__(self):
@@ -37,7 +42,7 @@ class Package(Base):
     id = Column(Integer, primary_key=True)
     library_id = Column(Integer, ForeignKey('library.id'))
     library = relationship('Library', back_populates='packages')
-    name = Column(String)
+    name = Column(String(200))
 
     files = relationship('File', back_populates='package')
 
@@ -49,7 +54,7 @@ class File(Base):
     package_id = Column(Integer, ForeignKey('java_package.id'))
     package = relationship('Package', back_populates='files')
     methods = relationship('Method', back_populates='file')
-    name = Column(String)
+    name = Column(String(200))
 
     def __repr__(self):
         return '<File: {} in {}>'.format(self.name, self.package.library.base_package)
@@ -62,7 +67,7 @@ class Method(Base):
     file_id = Column(Integer, ForeignKey('java_file.id'))
     file = relationship('File', back_populates='methods')
     method_versions = relationship('MethodVersion', back_populates='method')
-    signature = Column(String)
+    signature = Column(String(5000))
 
     def to_apk_method(self):
         return apk.Method(None, self.signature, None)
@@ -80,8 +85,10 @@ class MethodVersion(Base):
     # ngrams = relationship('NGram', back_populates='method_version')
     twograms = relationship('TwoGram', back_populates='method_version')
     threegrams = relationship('ThreeGram', back_populates='method_version')
-    elsim_instr_hash = Column(String)
-    elsim_ngram_hash = Column(String, nullable=True)
+    elsim_instr_hash = Column(String(200))
+    elsim_instr_nodot_hash = Column(String(200))
+    elsim_ngram_hash = Column(String(200), nullable=True)
+    length = Column(Integer)
 
     def to_apk_method(self):
         return apk.Method(None, self.method.signature, None)
@@ -104,8 +111,8 @@ class TwoGram(Base):
     id = Column(Integer, primary_key=True)
     method_version_id = Column(Integer, ForeignKey('method_version.id'))
     method_version = relationship('MethodVersion', back_populates='twograms')
-    one = Column(String)
-    two = Column(String)
+    one = Column(String(50))
+    two = Column(String(50))
 
 
 class ThreeGram(Base):
@@ -114,14 +121,19 @@ class ThreeGram(Base):
     id = Column(Integer, primary_key=True)
     method_version_id = Column(Integer, ForeignKey('method_version.id'))
     method_version = relationship('MethodVersion', back_populates='threegrams')
-    one = Column(String)
-    two = Column(String)
-    three = Column(String)
+    one = Column(String(50))
+    two = Column(String(50))
+    three = Column(String(50))
 
-if not database_exists(engine.url):
-    print('Creating DB')
-    create_database(engine.url)
-    Base.metadata.create_all(engine)
+if __name__ == '__main__':
+
+    if not mysql and not database_exists(engine.url):
+        print('Creating DB')
+        create_database(engine.url)
+        Base.metadata.create_all(engine)
+    if mysql:
+        print('Creating DB')
+        Base.metadata.create_all(engine)
 
 Session_maker = sessionmaker(bind=engine)
 session = Session_maker()

@@ -8,6 +8,8 @@ database = None
 
 dot_id_counter = 0
 
+deobfuscate_only = False
+
 
 def find_class_paths(path):
     class_paths = []

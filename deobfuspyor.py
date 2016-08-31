@@ -158,81 +158,105 @@ def new_analyze(path):
     # with open('out.dot', 'w+') as f:
     #    f.write(dot.source)
 
-    node = root.child_packages[0]
+    # node = root.child_packages[0]
     eops = root.find_eops()
-    files = []
+    # files = []
     q_methods = apkdb.session.query(apkdb.MethodVersion).all()
     for eop in eops:
         if eop.is_obfuscated() < 0.825:
-            print('Saving package to DB:', eop.get_full_package())
-            for file in eop.get_files():
-                file.generate_methods()
-                file.generate_sim_hashes()
-                file.generate_ngrams()
-            eop.save_to_db()
+            if not base.deobfuscate_only:
+                print(Fore.GREEN + 'Saving package to DB:', Fore.CYAN + eop.get_full_package() + Style.RESET_ALL)
+                for file in eop.get_files():
+                    file.generate_methods()
+                    file.generate_sim_hashes()
+                    file.generate_ngrams()
+                eop.save_to_db()
+            else:
+                print('Skipping: ', eop.get_full_package(), ', it doesn\'t appear to be obfuscated')
             continue
 
-        print('Analyzing package:', eop.get_full_package())
+        print(Fore.GREEN + 'Analyzing package:', Fore.CYAN + eop.get_full_package() + Style.RESET_ALL)
         p_dict_simhash = dict()
         p_dict_ngram = dict()
         for file in eop.get_files():
             methods = file.generate_methods()
             possible_files_simhash = dict()
             possible_files_ngram = dict()
-            for m in methods:
+            for m in file.get_largest_function():
                 m.generate_ngrams()
                 if m.is_significant() and 'constructor ' not in m.signature and 'abstract ' not in m.signature:
-                    # ngram comparison
-                    possible_method_versions_ngram = dict()
-                    possible_methods_ngram = dict()
-                    for ngram in m.ngrams:
-                        q = apkdb.session.query(apkdb.ThreeGram).filter(apkdb.ThreeGram.one == ngram[0],
-                                                                        apkdb.ThreeGram.two == ngram[1],
-                                                                        apkdb.ThreeGram.three == ngram[2]).all()
-                        for ng in q:
-                            if ng.method_version_id in possible_method_versions_ngram.keys():
-                                possible_method_versions_ngram[ng.method_version_id]['amount'] += 1
-                            else:
-                                possible_method_versions_ngram[ng.method_version_id] = {'amount': 1,
-                                                                                        'method': ng.method_version}
 
-                    for ngram_possibility in possible_method_versions_ngram.values():
-                        if ngram_possibility['method'].method.id in possible_methods_ngram:
-                            possible_methods_ngram[ngram_possibility['method'].method.id]['amount'] = max(
-                                possible_methods_ngram[ngram_possibility['method'].method.id]['amount'],
-                                ngram_possibility['amount'])
-                        else:
-                            possible_methods_ngram[ngram_possibility['method'].method.id] = {
-                                'amount': ngram_possibility['amount'], 'method': ngram_possibility['method'].method}
-                    s = sorted(possible_methods_ngram.items(), key=lambda x: x[1]['amount'])[-1:-5:-1]
-                    pprint(s)
-                    print(len(m.ngrams))
-                    '''
                     # SimHash comparison
                     simhash = m.elsim_similarity_instructions()
+                    simhash_nodot = m.elsim_similarity_nodot_instructions()
                     possible_methods_simhash = dict()
+                    possible_methods_ngram = dict()
+                    param_amount = len(m.get_params())
                     for compare_method_v in q_methods:
+                        if param_amount != len((compare_method_v.to_apk_method()).get_params()):
+                            continue
+                        if compare_method_v.length < int(m.length - (float(m.length) / 10)) \
+                                or compare_method_v.length > int(m.length + float(m.length) / 10):
+                            continue
                         sim = simhash.similarity(SimHash.from_string(compare_method_v.elsim_instr_hash))
+                        sim2 = simhash_nodot.similarity(SimHash.from_string(compare_method_v.elsim_instr_nodot_hash))
+                        sim = max(sim, sim2)
+                        if sim >= 0.9999:
+                            print('EXACT MATCH')
+                            print(m.signature, '--', compare_method_v.method.signature)
                         if sim >= 0.9:
+
+                            # Do NGRAM now!
+                            ngram_set_m = set(m.ngrams)
+                            ngram_list_compare = list()
+                            for ngram in compare_method_v.threegrams:
+                                ngram_list_compare.append((ngram.one, ngram.two, ngram.three))
+                            ngram_set_compare = set(ngram_list_compare)
+                            ngram_comparison = ngram_set_m.symmetric_difference(ngram_set_compare)
+                            if compare_method_v.method.id not in possible_methods_ngram.keys():
+                                possible_methods_ngram[compare_method_v.method.id] = {'m': compare_method_v.method,
+                                                                                      'diff': len(ngram_comparison)}
+                            else:
+                                possible_methods_ngram[compare_method_v.method.id]['diff'] = min(
+                                    possible_methods_ngram[compare_method_v.method.id]['diff'], len(ngram_comparison))
                             if compare_method_v.method.id not in possible_methods_simhash.keys():
                                 possible_methods_simhash[compare_method_v.method.id] = compare_method_v.method
+
                     for method in possible_methods_simhash.values():
                         if method.file.id not in possible_files_simhash:
                             possible_files_simhash[method.file.id] = {'file': method.file, 'amount': 1}
                         else:
                             possible_files_simhash[method.file.id]['amount'] += 1
-            for p in possible_files_simhash.values():
-                if p['file'].package.library.base_package in p_dict_simhash:
-                    p_dict_simhash[p['file'].package.library.base_package] += p['amount']
-                else:
-                    p_dict_simhash[p['file'].package.library.base_package] = p['amount']
-                    '''
-        print()
-        print(eop.get_full_package())
-        if p_dict_simhash:
-            print(sorted(p_dict_simhash.items(), key=lambda x: x[1], reverse=True))
-        if p_dict_ngram:
-            print(sorted(p_dict_ngram.items(), key=lambda x: x[1], reverse=True))
+                    best_ngrams = sorted(possible_methods_ngram.values(), key=lambda x: x['diff'])[
+                                  0:min(10, len(possible_methods_ngram))]
+                    for result in best_ngrams:
+                        if result['m'].file.id not in possible_files_ngram:
+                            possible_files_ngram[result['m'].file.id] = {'file': result['m'].file, 'diffs': result['diff']}
+                        else:
+                            possible_files_ngram[result['m'].file.id]['diffs'] += result['diff']
+
+            print(Fore.GREEN + 'File' + Fore.CYAN, file.get_full_package(),
+                  Fore.GREEN + 'is most probably:' + Style.RESET_ALL)
+            print('With Simhash:')
+            pprint(sorted(possible_files_simhash.items(), key=lambda x: x[1]['amount'], reverse=True)[
+                   0:min(5, len(possible_files_simhash))])
+            print('With NGram:')
+            pprint(sorted(possible_files_ngram.items(), key=lambda x: x[1]['diffs'])[
+                   0:min(5, len(possible_files_ngram))])
+            print()
+
+            #for p in possible_files_simhash.values():
+            #    if p['file'].package.library.base_package in p_dict_simhash:
+            #        p_dict_simhash[p['file'].package.library.base_package] += p['amount']
+            #    else:
+            #        p_dict_simhash[p['file'].package.library.base_package] = p['amount']
+
+        #print()
+        #print(eop.get_full_package())
+        #if p_dict_simhash:
+        #    print(sorted(p_dict_simhash.items(), key=lambda x: x[1], reverse=True))
+        #if p_dict_ngram:
+        #    print(sorted(p_dict_ngram.items(), key=lambda x: x[1], reverse=True))
 
     """for f in files:
         for e in files:
@@ -268,6 +292,8 @@ def main():
     parser.add_argument('-s', '--skip', dest='skip_all', action='store_true', help='Skip all')
     parser.add_argument('-a', '--analyze', dest='analyze', action='store_true',
                         help='Analyze instead of deobfuscate. With this, you can add new stuff to the database.')
+    parser.add_argument('-d', '--deobfuscate', dest='deobfuscate_only', action='store_true',
+                        help='Only Deobfuscate, don\'t analyze!')
     args = parser.parse_args()
 
     colorama.init()
@@ -285,9 +311,10 @@ def main():
         apks = [apk_paths]
 
     base.verbose = args.verbose
+    base.deobfuscate_only = args.deobfuscate_only
     already_in_db = []
     for apk in apks:
-        output_folder = os.path.basename(apk)[:-4]
+        output_folder = os.path.join('decompiled', os.path.basename(apk)[:-4])
 
         print(Fore.GREEN + '> Starting deobfuscation process for:', apk)
         print('---------------------------------------------')
@@ -297,7 +324,7 @@ def main():
             print(Style.RESET_ALL)
             shutil.rmtree(output_folder)
         if not args.skip_decompile:
-            run(['java', '-jar', 'apktool.jar', 'd', apk])
+            run(['java', '-jar', 'apktool.jar', '-b', '-o', output_folder, 'd', apk])
             print(Fore.BLUE + '>> Decompiling to smali code done')
         print(Style.RESET_ALL)
         if not args.analyze:

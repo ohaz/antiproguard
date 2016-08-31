@@ -364,7 +364,8 @@ class Package:
         """
         if len(self.child_files) > 0:
             self.is_eop = True
-            return
+            if not self.special:
+                return
         for child in self.child_packages:
             child.iterate_end_of_packages()
 
@@ -374,7 +375,11 @@ class Package:
         :return: List of EOPs
         """
         if self.is_eop:
-            return [self]
+            eops = [self]
+            if self.special:
+                for child in self.child_packages:
+                    eops.extend(child.find_eops())
+            return eops
         else:
             l = []
             for child in self.child_packages:
@@ -388,8 +393,9 @@ class Package:
         """
         files = []
         files.extend(self.child_files)
-        for child in self.child_packages:
-            files.extend(child.get_files())
+        if not self.special:
+            for child in self.child_packages:
+                files.extend(child.get_files())
         return files
 
     def set_special_path(self, path):
@@ -421,25 +427,18 @@ class Package:
     def is_obfuscated(self):
         """
         Tests via package name length if this package may be obfuscated.
-        package names with 1 or 2 characters length are considered obfuscated
+        Class names with 1 or 2 characters length are considered obfuscated
         :return: a float that shows how high the chance for this package to be obfuscated is
         """
-        package = self.get_full_package()
-        packages = package.split('.')
+        files = self.get_files()
         shorter = 0
         really_long = 0
-        for p in packages:
-            if len(p) < 2:
+        for f in files:
+            if len(f.get_class_name()) < 3:
                 shorter += 1
-            elif len(p) > 4:
+            elif len(f.get_class_name()) > 4:
                 really_long += 1
-        # if really_long > (0.5 * len(packages)):
-        #     shorter = max(0, shorter - really_long)
-        # return shorter * 1.0 / (len(packages) * 1.0)
-        if shorter >= 1:
-            return 1.0
-        else:
-            return 0.0
+        return float(shorter) / float(len(files))
 
     def get_full_path(self):
         """
@@ -477,10 +476,12 @@ class Package:
         leaves out the base package
         :return: dot-style path representation
         """
-        if self.parent.is_eop:
+        if self.is_eop:
+            return ''
+        if self.parent is None or self.parent.is_eop:
             return self.name
         else:
-            return self.parent.get_full_package() + '.' + self.name
+            return self.parent.get_full_sub_package() + '.' + self.name
 
     def pprint(self):
         """
@@ -535,7 +536,8 @@ class File:
         if parent is None:
             parent = apkdb.Package(library=lib, name=self.parent.get_full_sub_package())
             apkdb.session.add(parent)
-        file = apkdb.session.query(apkdb.File).filter(apkdb.File.package == parent, apkdb.File.name == self.get_class_name()).first()
+        file = apkdb.session.query(apkdb.File).filter(apkdb.File.package == parent,
+                                                      apkdb.File.name == self.get_class_name()).first()
         if file is None:
             file = apkdb.File(package=parent, name=self.get_class_name())
             apkdb.session.add(file)
@@ -602,6 +604,9 @@ class File:
 
         return self.methods
 
+    def get_largest_function(self):
+        yield from sorted(self.methods, key=lambda method: method.length, reverse=True)
+
     def generate_basic_blocks(self):
         """
         Generates the basic block structures for all methods in this file
@@ -613,7 +618,7 @@ class File:
         for method in methods:
             method.generate_basic_blocks()
 
-    def generate_ngrams(self, n=3, intersect=False):
+    def generate_ngrams(self, n=3, intersect=True):
         """
         Generates the n-grams for all methods in this file
         :param n: the length of a gram
@@ -632,6 +637,7 @@ class File:
             methods = self.generate_methods()
         for method in methods:
             method.elsim_similarity_instructions()
+            method.elsim_similarity_nodot_instructions()
 
     def pprint(self):
         """
@@ -667,7 +673,9 @@ class Method:
         self.basic_blocks = []
         self.ngrams = []
         self.elsim_ngram_hash = None
+        self.elsim_instr_nodot_hash = None
         self.elsim_instructions_hash = None
+        self.length = self.get_length()
 
     def get_name(self):
         return self.signature
@@ -676,6 +684,9 @@ class Method:
         self.signature = name
 
     name = property(get_name, set_name)
+
+    def get_length(self):
+        return len([x for x in self.instr_stripped if not x.startswith('.')])
 
     def instr_stripped_gen(self):
         """
@@ -708,17 +719,22 @@ class Method:
 
     def save_to_db(self, file):
         if 'constructor ' not in self.signature and 'abstract ' not in self.signature:
-            meth = apkdb.session.query(apkdb.Method).filter(apkdb.Method.file == file, apkdb.Method.signature == self.signature).first()
+            meth = apkdb.session.query(apkdb.Method).filter(apkdb.Method.file == file,
+                                                            apkdb.Method.signature == self.signature).first()
             if meth is None:
                 meth = apkdb.Method(file=file, signature=self.signature)
                 apkdb.session.add(meth)
-            meth_version = apkdb.MethodVersion(method=meth, elsim_instr_hash=str(self.elsim_similarity_instructions()))
+            meth_version = apkdb.MethodVersion(method=meth, elsim_instr_hash=str(self.elsim_similarity_instructions()),
+                                               elsim_instr_nodot_hash=str(self.elsim_similarity_nodot_instructions()),
+                                               length=len([x for x in self.instr_stripped if not x.startswith('.')]))
             apkdb.session.add(meth_version)
             for ngram in self.ngrams:
                 if len(ngram) == 2:
                     ngr = apkdb.TwoGram(method_version=meth_version, one=ngram[0], two=ngram[1])
                 elif len(ngram) == 3:
                     ngr = apkdb.ThreeGram(method_version=meth_version, one=ngram[0], two=ngram[1], three=ngram[2])
+                else:
+                    ngr = None
                 apkdb.session.add(ngr)
 
     def pprint(self):
@@ -773,7 +789,7 @@ class Method:
             else:
                 print('H', instr)
 
-    def generate_ngrams(self, n=3, intersect=False):
+    def generate_ngrams(self, n=3, intersect=True):
         """
         Generates n-grams for this method.
         :param n: the length of a gram
@@ -832,6 +848,11 @@ class Method:
         if self.elsim_instructions_hash is None:
             self.elsim_instructions_hash = SimHash(self.instr_stripped)
         return self.elsim_instructions_hash
+
+    def elsim_similarity_nodot_instructions(self):
+        if self.elsim_instr_nodot_hash is None:
+            self.elsim_instr_nodot_hash = SimHash([x for x in self.instr_stripped if not x.startswith('.')])
+        return self.elsim_instr_nodot_hash
 
     def generate_basic_blocks(self, invoke_ends=False):
         """
