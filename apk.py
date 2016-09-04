@@ -675,7 +675,9 @@ class Method:
         self.elsim_ngram_hash = None
         self.elsim_instr_nodot_hash = None
         self.elsim_instructions_hash = None
-        self.length = self.get_length()
+        self.elsim_instr_weak_hash = None
+        if self.instructions is not None:
+            self.length = self.get_length()
 
     def get_name(self):
         return self.signature
@@ -726,7 +728,9 @@ class Method:
                 apkdb.session.add(meth)
             meth_version = apkdb.MethodVersion(method=meth, elsim_instr_hash=str(self.elsim_similarity_instructions()),
                                                elsim_instr_nodot_hash=str(self.elsim_similarity_nodot_instructions()),
-                                               length=len([x for x in self.instr_stripped if not x.startswith('.')]))
+                                               elsim_instr_weak_hash=str(self.elsim_similarity_weak_instructions()),
+                                               length=len([x for x in self.instr_stripped if not x.startswith('.')]),
+                                               file=file)
             apkdb.session.add(meth_version)
             for ngram in self.ngrams:
                 if len(ngram) == 2:
@@ -853,6 +857,15 @@ class Method:
         if self.elsim_instr_nodot_hash is None:
             self.elsim_instr_nodot_hash = SimHash([x for x in self.instr_stripped if not x.startswith('.')])
         return self.elsim_instr_nodot_hash
+
+    def elsim_similarity_weak_instructions(self):
+        if self.elsim_instr_weak_hash is None:
+            instrs = self.instr_stripped
+            new_instrs = []
+            for instr in instrs:
+                new_instrs.append(instr.split(' ')[0])
+            self.elsim_instr_weak_hash = SimHash(new_instrs)
+        return self.elsim_instr_weak_hash
 
     def generate_basic_blocks(self, invoke_ends=False):
         """

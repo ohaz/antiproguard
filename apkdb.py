@@ -46,6 +46,12 @@ class Package(Base):
 
     files = relationship('File', back_populates='package')
 
+    def __repr__(self):
+        return '<Package {}>'.format(self.name)
+
+    def __str__(self):
+        return self.__repr__()
+
 
 class File(Base):
     __tablename__ = 'java_file'
@@ -54,10 +60,11 @@ class File(Base):
     package_id = Column(Integer, ForeignKey('java_package.id'))
     package = relationship('Package', back_populates='files')
     methods = relationship('Method', back_populates='file')
+    method_versions = relationship('MethodVersion', back_populates='file')
     name = Column(String(200))
 
     def __repr__(self):
-        return '<File: {} in {}>'.format(self.name, self.package.library.base_package)
+        return '<File: {} in {} from {}>'.format(self.name, self.package.name, self.package.library.base_package)
 
 
 class Method(Base):
@@ -82,11 +89,14 @@ class MethodVersion(Base):
     id = Column(Integer, primary_key=True)
     method_id = Column(Integer, ForeignKey('method.id'))
     method = relationship('Method', back_populates='method_versions')
+    file_id = Column(Integer, ForeignKey('java_file.id'))
+    file = relationship('File', back_populates='method_versions')
     # ngrams = relationship('NGram', back_populates='method_version')
     twograms = relationship('TwoGram', back_populates='method_version')
     threegrams = relationship('ThreeGram', back_populates='method_version')
     elsim_instr_hash = Column(String(200))
     elsim_instr_nodot_hash = Column(String(200))
+    elsim_instr_weak_hash = Column(String(200))
     elsim_ngram_hash = Column(String(200), nullable=True)
     length = Column(Integer)
 

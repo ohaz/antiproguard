@@ -143,6 +143,51 @@ def new_iterate(path):
     return root
 
 
+def compare(method, all_methods=None, hints=None):
+    method.generate_ngrams()
+    if hints is None:
+        q_methods = all_methods
+    else:
+        if len(hints) == 0:
+            print('HINTS 0')
+        q_methods = apkdb.session.query(apkdb.MethodVersion).filter(apkdb.MethodVersion.file_id.in_(hints)).all()
+
+    simhash = method.elsim_similarity_instructions()
+    simhash_nodot = method.elsim_similarity_nodot_instructions()
+    simhash_weak = method.elsim_similarity_weak_instructions()
+    param_amount = len(method.get_params())
+    new_hints = []
+    for compare_method in q_methods:
+        if param_amount != len((compare_method.to_apk_method()).get_params()):
+            continue
+        if compare_method.length < int(method.length - (float(method.length) / 10)) \
+                or compare_method.length > int(method.length + float(method.length) / 10):
+            continue
+        sim_weak = simhash_weak.similarity(SimHash.from_string(compare_method.elsim_instr_weak_hash))
+        if sim_weak > 0.75:
+            sim_complete = simhash.similarity(SimHash.from_string(compare_method.elsim_instr_hash))
+            sim_nodot = simhash_nodot.similarity(SimHash.from_string(compare_method.elsim_instr_nodot_hash))
+            sim = max(sim_weak, sim_complete, sim_nodot)
+            if sim > 0.9:
+                ngram_set_m = set(method.ngrams)
+                ngram_list_compare = list()
+                for ngram in compare_method.threegrams:
+                    ngram_list_compare.append((ngram.one, ngram.two, ngram.three))
+                ngram_set_compare = set(ngram_list_compare)
+                ngram_comparison = ngram_set_m.symmetric_difference(ngram_set_compare)
+                if len(ngram_comparison) <= 0.2 * method.length:
+                    if compare_method.method.file.id not in new_hints:
+                        new_hints.append(compare_method.method.file.id)
+    return new_hints
+
+
+def deeplen(l):
+    for e in l:
+        if len(e) > 0:
+            return True
+    return False
+
+
 def new_analyze(path):
     # android_manifest = ElementTree.parse(os.path.join(path, 'AndroidManifest.xml'))
     # root = android_manifest.getroot()
@@ -174,18 +219,47 @@ def new_analyze(path):
             else:
                 print('Skipping: ', eop.get_full_package(), ', it doesn\'t appear to be obfuscated')
             continue
-
         print(Fore.GREEN + 'Analyzing package:', Fore.CYAN + eop.get_full_package() + Style.RESET_ALL)
-        p_dict_simhash = dict()
-        p_dict_ngram = dict()
+        eop_suggestions = list()
         for file in eop.get_files():
-            methods = file.generate_methods()
-            possible_files_simhash = dict()
-            possible_files_ngram = dict()
+            file.generate_methods()
             for m in file.get_largest_function():
                 m.generate_ngrams()
-                if m.is_significant() and 'constructor ' not in m.signature and 'abstract ' not in m.signature:
+                if not m.is_significant() or 'constructor ' in m.signature or 'abstract ' in m.signature:
+                    continue
+                hints = compare(m, all_methods=q_methods, hints=None)
+                if len(hints) == 0:
+                    continue
+                other_hints = []
+                for other in file.get_largest_function():
+                    if other == m:
+                        continue
+                    if not other.is_significant() or 'constructor ' in other.signature or 'abstract ' in other.signature:
+                        continue
+                    other_hints.append(compare(other, all_methods=q_methods, hints=hints))
+                if deeplen(other_hints):
+                    # print(Fore.CYAN + 'File', file.get_full_package(), 'may be:' + Style.RESET_ALL)
+                    for hint in other_hints:
+                        if len(hint) == 0:
+                            continue
+                        else:
+                            for real_hint in hint:
+                                f = apkdb.session.query(apkdb.File).filter(apkdb.File.id == real_hint).first()
+                                # print(f)
+                                lib = f.package.library
+                                if (lib, f.package) not in eop_suggestions:
+                                    eop_suggestions.append((lib, f.package))
+                                    if eop_suggestions[-1] is None:
+                                        print(f, lib, 'seems to be None?')
+        if len(eop_suggestions) > 0:
+            print(Fore.CYAN + 'EOP', eop.get_full_package(), 'may be:' + Style.RESET_ALL)
+            for lib in eop_suggestions:
+                print(lib)
+        else:
+            print(Fore.CYAN + 'EOP', eop.get_full_package(), 'could', Fore.RED + 'not' + Fore.CYAN,
+                  'be deobfuscated :(' + Style.RESET_ALL)
 
+            '''
                     # SimHash comparison
                     simhash = m.elsim_similarity_instructions()
                     simhash_nodot = m.elsim_similarity_nodot_instructions()
@@ -243,20 +317,20 @@ def new_analyze(path):
             print('With NGram:')
             pprint(sorted(possible_files_ngram.items(), key=lambda x: x[1]['diffs'])[
                    0:min(5, len(possible_files_ngram))])
-            print()
+            print()'''
 
-            #for p in possible_files_simhash.values():
+            # for p in possible_files_simhash.values():
             #    if p['file'].package.library.base_package in p_dict_simhash:
             #        p_dict_simhash[p['file'].package.library.base_package] += p['amount']
             #    else:
             #        p_dict_simhash[p['file'].package.library.base_package] = p['amount']
 
-        #print()
-        #print(eop.get_full_package())
-        #if p_dict_simhash:
-        #    print(sorted(p_dict_simhash.items(), key=lambda x: x[1], reverse=True))
-        #if p_dict_ngram:
-        #    print(sorted(p_dict_ngram.items(), key=lambda x: x[1], reverse=True))
+            # print()
+            # print(eop.get_full_package())
+            # if p_dict_simhash:
+            #    print(sorted(p_dict_simhash.items(), key=lambda x: x[1], reverse=True))
+            # if p_dict_ngram:
+            #    print(sorted(p_dict_ngram.items(), key=lambda x: x[1], reverse=True))
 
     """for f in files:
         for e in files:
