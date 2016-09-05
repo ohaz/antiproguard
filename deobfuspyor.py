@@ -168,7 +168,7 @@ def compare(method, all_methods=None, hints=None):
             sim_complete = simhash.similarity(SimHash.from_string(compare_method.elsim_instr_hash))
             sim_nodot = simhash_nodot.similarity(SimHash.from_string(compare_method.elsim_instr_nodot_hash))
             sim = max(sim_weak, sim_complete, sim_nodot)
-            if sim > 0.9:
+            if sim > 0.90:
                 ngram_set_m = set(method.ngrams)
                 ngram_list_compare = list()
                 for ngram in compare_method.threegrams:
@@ -186,6 +186,10 @@ def deeplen(l):
         if len(e) > 0:
             return True
     return False
+
+
+def package_length(p):
+    return len(p.split('.'))
 
 
 def new_analyze(path):
@@ -254,6 +258,10 @@ def new_analyze(path):
         if len(eop_suggestions) > 0:
             print(Fore.CYAN + 'EOP', eop.get_full_package(), 'may be:' + Style.RESET_ALL)
             for lib in eop_suggestions:
+                other_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[0].base_package
+                if package_length(eop.get_full_package()) != package_length(other_package):
+                    print('Skipped', lib, '- Incorrect package length')
+                    continue
                 print(lib)
         else:
             print(Fore.CYAN + 'EOP', eop.get_full_package(), 'could', Fore.RED + 'not' + Fore.CYAN,
