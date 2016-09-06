@@ -260,7 +260,6 @@ def new_analyze(path):
             for lib in eop_suggestions:
                 other_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[0].base_package
                 if package_length(eop.get_full_package()) != package_length(other_package):
-                    print('Skipped', lib, '- Incorrect package length')
                     continue
                 print(lib)
         else:

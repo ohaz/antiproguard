@@ -347,6 +347,7 @@ class Package:
         self.special = special
         self._special_path = ''
         self.is_eop = False
+        self.hints = []
 
     def save_to_db(self):
         lib = apkdb.session.query(apkdb.Library).filter(apkdb.Library.base_package == self.get_full_package()).first()
@@ -529,6 +530,7 @@ class File:
         base.dot_id_counter += 1
         self.function_pattern = re.compile(r'\.method (.*)\n((?:.*\r?\n)*?)\.end method')
         self.methods = []
+        self.hints = []
 
     def save_to_db(self, lib):
         parent = apkdb.session.query(apkdb.Package).filter(apkdb.Package.library == lib,
@@ -672,6 +674,7 @@ class Method:
         self.instructions = instructions
         self.basic_blocks = []
         self.ngrams = []
+        self.hints = []
         self.elsim_ngram_hash = None
         self.elsim_instr_nodot_hash = None
         self.elsim_instructions_hash = None
