@@ -10,6 +10,7 @@ import base
 
 __author__ = 'ohaz'
 
+# ATTENTION: This is an old, unused file!
 
 class APICounter:
 

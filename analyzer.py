@@ -1,6 +1,8 @@
 __author__ = 'ohaz'
 from pprint import pprint
 
+# ATTENTION: This is an old, unused file!
+
 
 class Analyzer:
 
