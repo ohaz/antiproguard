@@ -20,7 +20,7 @@ The main script to run is deobfuspyor.py
 
 * If you want to add a jar/dex file to the database, run `python deobfuspyor.py -i <file.jar/file.dex>`
 * If you want to add a whole, unobfuscated apk to the database, run `python deobfuspyor.py -sb -t <file.apk>`
-* If you want to deobfuscate an apk, run `python deobfuspyor.py -d <file.apk>` The result is called "<file_name>.deobfuscated.apk"
+* If you want to deobfuscate an apk, run `python deobfuspyor.py -d <file.apk>` The result is called "[file_name].deobfuscated.apk"
 
 ### Additional parameters:
 
