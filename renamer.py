@@ -1,58 +1,150 @@
 from pprint import pprint
 import os
-import shutil
-from base import find_class_paths_and_iterate
 import difflib
 import re
 from base import verbose
+from distutils import dir_util
+import shutil
+import apkdb
 
 __author__ = 'ohaz'
 
 
 class Renamer:
-    def __init__(self, to_read, base_path):
-        self.to_read = to_read
-        self.base_path = base_path
+    """
+    Class that tries to rename Packages, Classes and Methods
+    """
+    def __init__(self, root, eops):
+        """
+        Initializes a new Renamer
+        :param root: The root node of a package/file tree
+        :param eops: A list of eops
+        """
+        self.root = root
+        self.eops = eops
+        # Avoid const-string replacements
+        # This is so that things like String("La/b/c/d/"); don't get renamed
+        self.to_avoid = re.compile(r'(\s*const-string[/jumbo]?\s.*,\s".*")')
 
-    def create_and_copy(self, to_change, new_path):
-        for e in to_change:
-            try:
-                os.makedirs(os.path.join(e[3], new_path))
-            except OSError as err:
-                # Already created correct folder
-                pass
-            shutil.copyfile(os.path.join(e[0], e[1]), os.path.join(e[3], new_path, e[1]))
-            # Deleting old class
-            os.remove(os.path.join(e[0], e[1]))
+    def rename_packages(self):
+        """
+        Rename packages using their hints
+        :return: void
+        """
+        for eop in self.eops:
+            if len(eop.hints) == 0:
+                continue
+            # Take the first hint, it's usually the correct one
+            lib = eop.hints[0]
+            other_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[
+                0].base_package
+            # Rename all calls to this package
+            self.rename_calls(eop.get_full_package(), other_package)
+        for eop in self.eops:
+            if len(eop.hints) == 0:
+                continue
+            special = eop.search_special()
+            lib = eop.hints[0]
+            other_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[
+                0].base_package
+            other_path = other_package.replace('.', os.sep)
+            # Move the package to it's new location
+            self.create_and_copy(eop.get_full_path(), os.path.join(special.get_full_path(), other_path))
 
-    def rename_package(self, old_package, new_package):
-        if not len(old_package) == len(new_package):
-            print('PACKAGE LENGTH NOT CORRECT')
-            return
-        old_path = os.sep.join(old_package)
-        new_path = os.sep.join(new_package)
-        to_change = [list(x) for x in self.to_read if x[2] == old_path]
-        for e in to_change:
-            e.append(e[0].replace(os.path.join('', old_path), ''))
+    def rename_classes(self):
+        """
+        Rename Classes using their hints
+        :return: void
+        """
+        for eop in self.eops:
+            file_ids_done = list()
+            if len(eop.hints) == 0:
+                continue
+            lib = eop.hints[0]
+            active_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[
+                0].base_package
+            for file in eop.get_files():
+                if not file.is_obfuscated_itself():
+                    # Skip files that don't seem to be obfuscated
+                    continue
+                for hint in file.hints:
+                    if hint in file_ids_done:
+                        continue
+                    apkfile = apkdb.session.query(apkdb.File).filter(apkdb.File.id == hint).first()
+                    apkfile_package_name = '.'.join(
+                        [apkfile.package.library.base_package, apkfile.package.name]) if len(
+                        apkfile.package.name) > 0 else apkfile.package.library.base_package
+                    if apkfile_package_name != active_package:
+                        continue
+                    old_package = file.get_full_package()
+                    # Rename this file and rename all calls to this file
+                    if self.rename_this_file(file, apkfile, apkfile_package_name):
+                        file_ids_done.append(hint)
+                        self.rename_calls(old_package, apkfile_package_name + '.' + apkfile.name)
 
-        to_avoid = re.compile(r'(\s*const-string[/jumbo]?\s.*,\s".*")')
+    def rename_this_file(self, file, new, apkfile_package_name):
+        """
+        Rename this file to a new name
+        :param file: the file to rename
+        :param new: the new file (from db)
+        :param apkfile_package_name: the package of the apkfile
+        :return: True if works, else False
+        """
+        new_package = apkfile_package_name + '.' + new.name
+        new_package_in_path = '/'.join(new_package.split('.'))
+        new_replace = 'L' + new_package_in_path + ';'
+        old_package = file.get_full_package()
+        old_package_in_path = '/'.join(old_package.split('.'))
+        old_replace = 'L' + old_package_in_path + ';'
+        new_filename = os.path.join(os.path.dirname(file.get_full_path()), new.name+'.smali')
+        if os.path.exists(new_filename):
+            # If target file already exists, this probably was not the correct deobfuscation. Skip it
+            return False
+        with open(file.get_full_path(), 'r') as readfile:
+            with open(new_filename, 'w+') as writefile:
+                content = readfile.read()
+                # read line by line and write line by line, replacing all occurrences of the old name with the new one
+                for line in content.splitlines():
+                    search = self.to_avoid.findall(line)
+                    if len(search) == 0:
+                        writefile.write(line.replace(old_replace, new_replace))
+                    else:
+                        writefile.write(line)
+                    writefile.write(os.linesep)
+        if os.path.exists(new_filename):
+            os.remove(file.get_full_path())
+            file.name = new.name + '.smali'
+            return True
+        return False
 
-        # Create new folders and copy files there:
-        self.create_and_copy(to_change, new_path)
-        self.to_read = find_class_paths_and_iterate(self.base_path)
-
-        for class_file in self.to_read:
+    def rename_calls(self, old_package, new_package):
+        """
+        Rename calls targeted on the old package to the new package
+        :param old_package: the old package, prior to renaming
+        :param new_package: the new package, post renaming
+        :return: void
+        """
+        files = []
+        for f_eop in self.eops:
+            files.extend(f_eop.get_files())
+        for class_file in files:
+            # Looping over all files
             change = False
-            with open(os.path.join(class_file[0], class_file[1]), 'r') as f:
+            with open(class_file.get_full_path(), 'r') as f:
                 content = f.read()
                 new_content = ''
-                for line in iter(content.splitlines()):
-                    search = to_avoid.findall(line)
+                for line in content.splitlines():
+                    search = self.to_avoid.findall(line)
                     if len(search) == 0:
-                        new_content += line.replace('L' + '/'.join(old_package), 'L' + '/'.join(new_package))
+                        # Replace the old package name with the new one.
+                        # Packages have the format La/b/c/d/e;
+                        # with e being the class and a,b,c,d being packages and subpackages
+                        new_content += line.replace('L' + '/'.join(old_package.split('.')) + ';',
+                                                    'L' + '/'.join(new_package.split('.')) + ';')
                     else:
                         new_content += line
-                    new_content += os.linesep
+                    if len(line) > 0:
+                        new_content += os.linesep
                 if not new_content == content:
                     change = True
                     if verbose:
@@ -60,10 +152,33 @@ class Renamer:
                         for s in difflib.context_diff(content, new_content):
                             print(s)
             if change:
-                os.remove(os.path.join(class_file[0], class_file[1]))
-                with open(os.path.join(class_file[0], class_file[1]), 'a+') as f:
+                # Replace the old file with the fixed new one
+                os.remove(class_file.get_full_path())
+                with open(class_file.get_full_path(), 'w+') as f:
                     f.write(new_content)
 
+    def create_and_copy(self, old_path, new_path):
+        """
+        Create a package with a deobfuscated name and copy all contens of the old one to the new one
+        :param old_path: the path prior to the copy process
+        :param new_path: the path post to the copy process
+        :return: void
+        """
+        print('Copying from {} to {}... '.format(old_path, new_path), end='')
+        if old_path == new_path:
+            print('Skipped')
+            return
+        try:
+            os.makedirs(new_path)
+        except OSError as err:
+            pass
+        dir_util._path_created = {}
+        dir_util.copy_tree(old_path, new_path)
+        shutil.rmtree(old_path)
+        print('Done')
+
+
+'''
     def rename_function(self, package, java_class, function, new_name):
         raise NotImplementedError()
 
@@ -95,3 +210,4 @@ class Renamer:
         os.remove(os.path.join(location[0], location[1]))
         with open(os.path.join(location[0], location[1]), 'a+') as f:
             f.write(content)
+'''

@@ -3,3 +3,4 @@ colorama
 sqlalchemy
 sqlalchemy_utils
 simhash
+tqdm

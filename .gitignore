@@ -98,3 +98,4 @@ ENV/
 */*
 *.zip
 *.sqlite
+config.py

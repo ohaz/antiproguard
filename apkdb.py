@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.ext.declarative import declarative_base
 import apk
+import config
 
 __author__ = 'ohaz'
 
@@ -13,15 +14,16 @@ echo = False
 if __name__ == '__main__':
     echo = True
 
-if mysql:
-    engine = create_engine('mysql+pymysql://deobfuspyor:deob@localhost/deobfuspyor')
-else:
-    engine = create_engine('sqlite:///apkdb.sqlite', echo=echo)
+engine = create_engine(config.engine_url)
 
 Base = declarative_base()
 
 
 class Library(Base):
+    """
+    Model for a java library
+    Contains a base package and a list of packages in this library
+    """
     __tablename__ = 'library'
 
     id = Column(Integer, primary_key=True)
@@ -37,6 +39,10 @@ class Library(Base):
 
 
 class Package(Base):
+    """
+    Model for a java package
+    Is part of a library, has a name and contains a list of files in this package
+    """
     __tablename__ = 'java_package'
 
     id = Column(Integer, primary_key=True)
@@ -54,6 +60,10 @@ class Package(Base):
 
 
 class File(Base):
+    """
+    Model for a java file.
+    Is in a package, has a name and contains a list of methods
+    """
     __tablename__ = 'java_file'
 
     id = Column(Integer, primary_key=True)
@@ -68,6 +78,11 @@ class File(Base):
 
 
 class Method(Base):
+    """
+    Model for a method in a java file
+    Contains a list of different versions of this method
+    and a signature
+    """
     __tablename__ = 'method'
 
     id = Column(Integer, primary_key=True)
@@ -84,6 +99,10 @@ class Method(Base):
 
 
 class MethodVersion(Base):
+    """
+    A specific version of a method
+    Contains the SimHash hashes and a list of three-grams and two-grams (two-grams should be empty in this implementation)
+    """
     __tablename__ = 'method_version'
 
     id = Column(Integer, primary_key=True)
@@ -98,24 +117,21 @@ class MethodVersion(Base):
     elsim_instr_nodot_hash = Column(String(200))
     elsim_instr_weak_hash = Column(String(200))
     elsim_ngram_hash = Column(String(200), nullable=True)
-    length = Column(Integer)
+    length = Column(Integer, index=True)
 
     def to_apk_method(self):
+        """
+        Generate a apk Method to be able to do functionality on the method signature, instead of having to
+        implement all functions twice
+        :return: object of apk.Method
+        """
         return apk.Method(None, self.method.signature, None)
 
 
-# class NGram(Base):
-#  DEPRECATED CLASS
-#    __tablename__ = 'ngram'
-
-#    id = Column(Integer, primary_key=True)
-#    method_version_id = Column(Integer, ForeignKey('method_version.id'))
-#    method_version = relationship('MethodVersion', back_populates='ngrams')
-#    ngram = Column(String)
-#    # TODO: Add size of ngram
-
-
 class TwoGram(Base):
+    """
+    A two-gram, currently unused
+    """
     __tablename__ = 'twogram'
 
     id = Column(Integer, primary_key=True)
@@ -126,6 +142,10 @@ class TwoGram(Base):
 
 
 class ThreeGram(Base):
+    """
+    A three-gram
+    Contains the three parts of the tuple
+    """
     __tablename__ = 'threegram'
 
     id = Column(Integer, primary_key=True)
@@ -136,7 +156,7 @@ class ThreeGram(Base):
     three = Column(String(50))
 
 if __name__ == '__main__':
-
+    # We can create new database/tables if they don't exist
     if not mysql and not database_exists(engine.url):
         print('Creating DB')
         create_database(engine.url)

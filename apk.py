@@ -349,7 +349,37 @@ class Package:
         self.is_eop = False
         self.hints = []
 
+    def get_hints(self):
+        """
+        Gets the 'hints' for this Package in dict format
+        :return: a dict with the hints for this package
+        """
+        value = dict()
+        value['hints'] = []
+        for hint in self.hints:
+            value['hints'].append(str(hint[0]) + '-' + str(hint[1]))
+        value['sub-packages'] = {}
+        value['files'] = {}
+        for package in self.child_packages:
+            value['sub-packages'][package.name] = package.get_hints()
+        for file in self.child_files:
+            value['files'][file.name] = file.get_hints()
+        return value
+
+    def search_special(self):
+        """
+        Searches for a special package, bottom-up
+        :return: the first special node found
+        """
+        if self.special:
+            return self
+        return self.parent.search_special()
+
     def save_to_db(self):
+        """
+        Save this package to the database
+        :return: void
+        """
         lib = apkdb.session.query(apkdb.Library).filter(apkdb.Library.base_package == self.get_full_package()).first()
         if lib is None:
             lib = apkdb.Library(name=self.get_full_package(), base_package=self.get_full_package())
@@ -516,6 +546,8 @@ class Package:
             for f in self.child_files:
                 f.graph(dot, self)
 
+METHOD_PATTERN = re.compile(r'\.method (.*)\n((?:.*\r?\n)*?)\.end method')
+
 
 class File:
     def __init__(self, name, parent):
@@ -528,11 +560,33 @@ class File:
         self.parent = parent
         self.dot_id = base.dot_id_counter
         base.dot_id_counter += 1
-        self.function_pattern = re.compile(r'\.method (.*)\n((?:.*\r?\n)*?)\.end method')
         self.methods = []
         self.hints = []
 
+    def get_hints(self):
+        """
+        Gets the 'hints' for this file in dict format
+        :return: a dict with the hints for this file
+        """
+        value = dict()
+        value['hints'] = []
+        for hint in self.hints:
+            apkfile = apkdb.session.query(apkdb.File).filter(apkdb.File.id == hint).first()
+            value['hints'].append(apkfile.name)
+        value['methods'] = {}
+        for method in self.methods:
+            value['methods'][method.signature] = []
+            for hint in method.hints:
+                value['methods'][method.signature].append(
+                    apkdb.session.query(apkdb.Method).filter(apkdb.Method.id == hint).first().signature)
+        return value
+
     def save_to_db(self, lib):
+        """
+        Saves this file to the database
+        :param lib: the parent library that contains this file
+        :return: void
+        """
         parent = apkdb.session.query(apkdb.Package).filter(apkdb.Package.library == lib,
                                                            apkdb.Package.name == self.parent.get_full_sub_package()).first()
         if parent is None:
@@ -545,6 +599,15 @@ class File:
             apkdb.session.add(file)
         for method in self.methods:
             method.save_to_db(file)
+
+    def is_obfuscated_itself(self):
+        """
+        A single file may not be obfuscated, even if the package is
+        :return: boolean indicating whether this file seems to be obfuscated
+        """
+        if len(self.name) > 3:
+            return False
+        return True
 
     def get_path(self):
         """
@@ -601,12 +664,16 @@ class File:
         """
         with open(self.get_full_path(), 'r') as f:
             content = f.read()
-        for method in self.function_pattern.findall(content):
+        for method in METHOD_PATTERN.findall(content):
             self.methods.append(Method(self, method[0], method[1]))
 
         return self.methods
 
     def get_largest_function(self):
+        """
+        A generator that contains the functions, ordered by size. Only works after calling generate_methods()
+        :return: generator for the functions
+        """
         yield from sorted(self.methods, key=lambda method: method.length, reverse=True)
 
     def generate_basic_blocks(self):
@@ -634,6 +701,10 @@ class File:
             method.generate_ngrams(n, intersect)
 
     def generate_sim_hashes(self):
+        """
+        Helper method to generate similarity hashes with elsim simhash
+        :return:
+        """
         methods = self.methods
         if len(methods) == 0:
             methods = self.generate_methods()
@@ -660,6 +731,8 @@ class File:
         dot.node(str(self.dot_id), 'F: ' + self.name)
         dot.edge(str(p.dot_id), str(self.dot_id))
 
+PARAMS_PATTERN = re.compile(r'.*\((.*)\).*')
+
 
 class Method:
     def __init__(self, file, signature, instructions):
@@ -683,14 +756,27 @@ class Method:
             self.length = self.get_length()
 
     def get_name(self):
+        """
+        Signature of this Method
+        :return: string showing the signature
+        """
         return self.signature
 
     def set_name(self, name):
+        """
+        Set the signature of this method
+        :param name: the new signature
+        :return: void
+        """
         self.signature = name
 
     name = property(get_name, set_name)
 
     def get_length(self):
+        """
+        Gets the length of this method, just instructions
+        :return: integer containing the length of this method
+        """
         return len([x for x in self.instr_stripped if not x.startswith('.')])
 
     def instr_stripped_gen(self):
@@ -703,9 +789,12 @@ class Method:
     instr_stripped = property(instr_stripped_gen)
 
     def get_params(self):
+        """
+        Get a list of parameters for this function, containing both native parameters as well es objects
+        :return: A list of parameters
+        """
         prims = ['Z', 'B', 'S', 'C', 'I', 'J', 'F', 'D']
-        r = re.compile(r'.*\((.*)\).*')
-        p = r.search(self.signature).group(1)
+        p = PARAMS_PATTERN.search(self.signature).group(1)
         params = []
         current = ''
         in_obj = False
@@ -723,6 +812,11 @@ class Method:
         return params
 
     def save_to_db(self, file):
+        """
+        Save this Method to the database, only if it's neither constructor nor abstract
+        :param file: The file this method belongs to
+        :return: void
+        """
         if 'constructor ' not in self.signature and 'abstract ' not in self.signature:
             meth = apkdb.session.query(apkdb.Method).filter(apkdb.Method.file == file,
                                                             apkdb.Method.signature == self.signature).first()
@@ -842,26 +936,47 @@ class Method:
                 print('H', instr)
 
     def is_significant(self):
+        """
+        A method is only significant if it contains more than 2 ngrams
+        :return: boolean showing if this method is significant
+        """
         if len(self.ngrams) > 2:
             return True
         return False
 
     def elsim_similarity_ngram(self):
+        """
+        generates the elsim hash for the ngrams
+        :return: the elsim hash
+        """
         if self.elsim_ngram_hash is None:
             self.elsim_ngram_hash = SimHash(self.ngrams)
         return self.elsim_ngram_hash
 
     def elsim_similarity_instructions(self):
+        """
+        generates the elsim hash for the instructions
+        :return: the elsim hash
+        """
         if self.elsim_instructions_hash is None:
             self.elsim_instructions_hash = SimHash(self.instr_stripped)
         return self.elsim_instructions_hash
 
     def elsim_similarity_nodot_instructions(self):
+        """
+        generates the elsim hash for the instructions that don't start with a .
+        :return: the elsim hash
+        """
         if self.elsim_instr_nodot_hash is None:
             self.elsim_instr_nodot_hash = SimHash([x for x in self.instr_stripped if not x.startswith('.')])
         return self.elsim_instr_nodot_hash
 
     def elsim_similarity_weak_instructions(self):
+        """
+        generates the elsim hash for the instructions that don't start with a ., and only contains the instructions themselves,
+        not parameters of them
+        :return: the elsim hash
+        """
         if self.elsim_instr_weak_hash is None:
             instrs = self.instr_stripped
             new_instrs = []
