@@ -2,6 +2,7 @@
 
 ## Setup
 
+* Clone this repo
 * Requires python3
 * run `pip install -r requirements.txt` to get the required python modules
 * It's preferred to do this in a virtualenv, see the documentation of virtualenv for this
@@ -10,6 +11,7 @@
 * copy the config.example.py to config.py and edit the lines (especially database, apktool and baksmali locations)
 * if you want to use mysql, set up a mysql database
 * after setting up the database and editing the config, run `python apkdb.py`, it'll automatically create all tables needed
+* You may have to create a folder called "decompiled" in the root folder of this application
 
 ## Usage
 
