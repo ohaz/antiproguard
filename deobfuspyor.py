@@ -2,24 +2,18 @@ import argparse
 import os
 import subprocess
 from defusedxml import ElementTree
-from api_counter import APICounter
-from analyzer import Analyzer
-from function_comparator import FunctionComparator
 from renamer import Renamer
-from base import find_class_paths_and_iterate, find_class_paths
+from base import find_class_paths
 import base
 import shutil
 import colorama
 from colorama import Fore, Style
-from pprint import pprint
-import database
 from apk import File, Package
 import apkdb
 from elsim import SimHash
 import datetime
 import json
 from tqdm import tqdm
-import time
 
 try:
     import config
@@ -332,6 +326,8 @@ def jar_to_dex(jar_file, name):
     if not os.path.exists('temp'):
         os.mkdir('temp')
     result = os.path.join('temp', name + '.dex')
+    if os.path.exists(result):
+        os.remove(result)
     subprocess.run([config.dx_path, '--dex', '--output=' + result, jar_file])
     return result
 
@@ -407,6 +403,7 @@ def main():
                 print('Wrong file extension. Continuing')
                 continue
             insert_only(dex_to_smali(dex, filename))
+            continue
 
         if args.timed:
             start_time = datetime.datetime.now()
