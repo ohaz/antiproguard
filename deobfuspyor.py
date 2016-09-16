@@ -31,7 +31,7 @@ def run(cmd):
     :param cmd: the command to run, as a list
     :return: void
     """
-    subprocess.run(cmd)
+    subprocess.call(cmd)
 
 
 def search_mains(xml_root):
@@ -328,7 +328,7 @@ def jar_to_dex(jar_file, name):
     result = os.path.join('temp', name + '.dex')
     if os.path.exists(result):
         os.remove(result)
-    subprocess.run([config.dx_path, '--dex', '--output=' + result, jar_file])
+    run([config.dx_path, '--dex', '--output=' + result, jar_file])
     return result
 
 
@@ -346,7 +346,7 @@ def dex_to_smali(dex, name):
     result_path = os.path.join(config.decompile_folder, name)
     out_path = os.path.join(result_path, 'smali')
     os.makedirs(out_path)
-    subprocess.run(['java', '-jar', config.baksmali_path, '-o', out_path, dex])
+    run(['java', '-jar', config.baksmali_path, '-o', out_path, dex])
     return result_path
 
 
