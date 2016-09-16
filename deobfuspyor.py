@@ -420,7 +420,7 @@ def main():
             shutil.rmtree(output_folder)
 
         if not args.skip_decompile:
-            run(['java', '-jar', config.apk_tool_path, '-b', '-o', output_folder, 'd', apk])
+            run(['java', '-jar', config.apk_tool_path, '-o', output_folder, 'd', apk])
             print(Fore.BLUE + '>> Decompiling to smali code done')
 
         print(Style.RESET_ALL)
@@ -431,7 +431,7 @@ def main():
 
         if not args.skip_build:
             print('Rebuilding APK')
-            run(['java', '-jar', config.apk_tool_path, 'b', os.path.join(os.getcwd(), output_folder), '-o',
+            run(['java', '-jar', config.apk_tool_path, 'b', os.path.join(os.getcwd(), output_folder), '-f', '-o',
                  apk + '_deobfuscated.apk'])
             if args.verbose:
                 base.verbose = True

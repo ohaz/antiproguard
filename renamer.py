@@ -139,8 +139,8 @@ class Renamer:
                         # Replace the old package name with the new one.
                         # Packages have the format La/b/c/d/e;
                         # with e being the class and a,b,c,d being packages and subpackages
-                        new_content += line.replace('L' + '/'.join(old_package.split('.')) + ';',
-                                                    'L' + '/'.join(new_package.split('.')) + ';')
+                        new_content += line.replace('L' + '/'.join(old_package.split('.')),
+                                                    'L' + '/'.join(new_package.split('.')))
                     else:
                         new_content += line
                     if len(line) > 0:
