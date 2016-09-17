@@ -4,9 +4,9 @@
 
 * Clone this repo
 * Requires python >= 3.4 and java >= 7 to be installed.
+* It's preferred to do the following steps in a virtualenv, see the documentation of virtualenv for this
 * Either do the following steps manually, or run `python init.py` and do the interactive initialization tool
 * run `pip install -r requirements.txt` to get the required python modules
-* It's preferred to do this in a virtualenv, see the documentation of virtualenv for this
 * Download apktool (https://ibotpeaches.github.io/Apktool/), no need for the windows wrapper, store it somewhere and remember the location
 * Download baksmali (https://bitbucket.org/JesusFreke/smali/downloads), store it somewhere and remember the location
 * copy the config.example.py to config.py and edit the lines (especially database, apktool and baksmali locations)
