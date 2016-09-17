@@ -155,7 +155,8 @@ class ThreeGram(Base):
     two = Column(String(50))
     three = Column(String(50))
 
-if __name__ == '__main__':
+
+def main():
     # We can create new database/tables if they don't exist
     if not mysql and not database_exists(engine.url):
         print('Creating DB')
@@ -164,6 +165,9 @@ if __name__ == '__main__':
     if mysql:
         print('Creating DB')
         Base.metadata.create_all(engine)
+
+if __name__ == '__main__':
+    main()
 
 Session_maker = sessionmaker(bind=engine)
 session = Session_maker()
