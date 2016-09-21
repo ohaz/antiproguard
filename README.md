@@ -11,7 +11,7 @@
 * Download baksmali (https://bitbucket.org/JesusFreke/smali/downloads), store it somewhere and remember the location
 * copy the config.example.py to config.py and edit the lines (especially database, apktool and baksmali locations)
 * if you want to use _mysql_, set up a mysql database
-* if you want to use _sqlite_, in the config file, comment out the mysql engine_url and remove the comment in front of the sqlite engine_url. Also, set mysql = True to False
+* if you want to use _sqlite_, in the config file, set mysql = True to False
 * after setting up the database and editing the config, run `python apkdb.py`, it'll automatically create all tables needed
 * You may have to create a folder called "decompiled" in the root folder of this application
 
