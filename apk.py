@@ -605,7 +605,7 @@ class File:
         A single file may not be obfuscated, even if the package is
         :return: boolean indicating whether this file seems to be obfuscated
         """
-        if len(self.name) > 3:
+        if len(self.get_class_name()) > 3:
             return False
         return True
 

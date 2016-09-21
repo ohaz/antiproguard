@@ -269,14 +269,33 @@ def new_analyze(path):
                                     eop_suggestions.append((lib, f.package))
         if len(eop_suggestions) > 0:
             # We found a result - this package probably can be deobfuscated
-            eop.hints = eop_suggestions
+            temp_suggestions = list()
             print(Fore.CYAN + 'EOP', eop.get_full_package(), 'may be:' + Style.RESET_ALL)
+            i = 0
             for lib in eop_suggestions:
                 other_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[
                     0].base_package
                 if package_length(eop.get_full_package()) != package_length(other_package):
                     continue
-                print(lib)
+                temp_suggestions.append(lib)
+                print('{})'.format(i), lib)
+                i += 1
+            if len(temp_suggestions) > 0:
+                if base.interactive:
+                        t = -2
+                        while t not in range(-1, len(temp_suggestions)):
+                            try:
+                                t = int(input('Which one do you want to use? [0 - {}] or -1 for None'.format(len(temp_suggestions) - 1)).strip())
+                            except ValueError:
+                                t = -2
+                        if t == -1:
+                            temp_suggestions = list()
+                        else:
+                            temp_suggestions[0], temp_suggestions[t] = temp_suggestions[t], temp_suggestions[0]
+            else:
+                print(Fore.CYAN + 'EOP', eop.get_full_package(), 'could', Fore.RED + 'not' + Fore.CYAN,
+                      'be deobfuscated :(' + Style.RESET_ALL)
+            eop.hints = temp_suggestions
         else:
             print(Fore.CYAN + 'EOP', eop.get_full_package(), 'could', Fore.RED + 'not' + Fore.CYAN,
                   'be deobfuscated :(' + Style.RESET_ALL)
@@ -289,8 +308,13 @@ def new_analyze(path):
         json.dump(js, f, sort_keys=True, indent=4)
     # Let's start renaming. We rename bottom-up, because that makes renaming a lot easier
     # since we don't really have to memorize what we've already done and how it was called before
+    print(Fore.BLUE + 'Starting Renaming process...' + Style.RESET_ALL)
     renamer = Renamer(root, eops)
+    print(Fore.CYAN + 'Renaming methods and methodcalls' + Style.RESET_ALL)
+    renamer.rename_methods()
+    print(Fore.CYAN + 'Renaming Classes and Class Calls' + Style.RESET_ALL)
     renamer.rename_classes()
+    print(Fore.CYAN + 'Renaming Packages and Package Calls' + Style.RESET_ALL)
     renamer.rename_packages()
 
 
@@ -366,6 +390,8 @@ def main():
     parser.add_argument('-s', '--skip', dest='skip_all', action='store_true', help='Skip all')
     parser.add_argument('-d', '--deobfuscate', dest='deobfuscate_only', action='store_true',
                         help='Only Deobfuscate, don\'t analyze!')
+    parser.add_argument('-m', '--manually', dest='manually', action='store_true',
+                        help='Interactively/Manually decide whether deobfuscation is correct')
     parser.add_argument('-t', '--time', dest='timed', action='store_true', help='Show required time')
     parser.add_argument('-i', '--insert', dest='insert', action='store_true', help='Insert jar or dex into database')
     args = parser.parse_args()
@@ -389,6 +415,7 @@ def main():
 
     base.verbose = args.verbose
     base.deobfuscate_only = args.deobfuscate_only
+    base.interactive = args.manually
 
     # Iterate over all apks/jars/dexs
     for apk in apks:

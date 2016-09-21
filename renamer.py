@@ -2,6 +2,9 @@ from pprint import pprint
 import os
 import difflib
 import re
+
+from tqdm import tqdm
+
 from base import verbose
 from distutils import dir_util
 import shutil
@@ -14,6 +17,7 @@ class Renamer:
     """
     Class that tries to rename Packages, Classes and Methods
     """
+
     def __init__(self, root, eops):
         """
         Initializes a new Renamer
@@ -25,6 +29,8 @@ class Renamer:
         # Avoid const-string replacements
         # This is so that things like String("La/b/c/d/"); don't get renamed
         self.to_avoid = re.compile(r'(\s*const-string[/jumbo]?\s.*,\s".*")')
+        self.method_call_name = re.compile(r'\s*.method\s(?:.*)(\w\(.*\).*)')
+        self.method_name = re.compile(r'\s*.method\s(?:.*)(\w)\(.*\).*')
 
     def rename_packages(self):
         """
@@ -56,7 +62,7 @@ class Renamer:
         Rename Classes using their hints
         :return: void
         """
-        for eop in self.eops:
+        for eop in tqdm(self.eops):
             file_ids_done = list()
             if len(eop.hints) == 0:
                 continue
@@ -96,7 +102,7 @@ class Renamer:
         old_package = file.get_full_package()
         old_package_in_path = '/'.join(old_package.split('.'))
         old_replace = 'L' + old_package_in_path + ';'
-        new_filename = os.path.join(os.path.dirname(file.get_full_path()), new.name+'.smali')
+        new_filename = os.path.join(os.path.dirname(file.get_full_path()), new.name + '.smali')
         if os.path.exists(new_filename):
             # If target file already exists, this probably was not the correct deobfuscation. Skip it
             return False
@@ -127,7 +133,7 @@ class Renamer:
         files = []
         for f_eop in self.eops:
             files.extend(f_eop.get_files())
-        for class_file in files:
+        for class_file in tqdm(files):
             # Looping over all files
             change = False
             with open(class_file.get_full_path(), 'r') as f:
@@ -164,9 +170,7 @@ class Renamer:
         :param new_path: the path post to the copy process
         :return: void
         """
-        print('Copying from {} to {}... '.format(old_path, new_path), end='')
         if old_path == new_path:
-            print('Skipped')
             return
         try:
             os.makedirs(new_path)
@@ -175,9 +179,99 @@ class Renamer:
         dir_util._path_created = {}
         dir_util.copy_tree(old_path, new_path)
         shutil.rmtree(old_path)
-        print('Done')
+
+    def rename_methods(self):
+        for eop in self.eops:
+            if len(eop.hints) == 0:
+                continue
+            lib = eop.hints[0]
+            active_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[
+                0].base_package
+            for file in tqdm(eop.get_files()):
+                if not file.is_obfuscated_itself() or len(file.hints) == 0:
+                    # Skip files that don't seem to be obfuscated
+                    continue
+                # Generate the left part of the method call string.
+                # Method calls look like L/package1/package2/Class;->methodname(Param1Type,Param2Type);ReturnType
+                call_string_left = 'L' + '/'.join(file.get_full_package().split('.')) + ';->'
+                apkfile = apkdb.session.query(apkdb.File).filter(apkdb.File.id == file.hints[0]).first()
+                call_replaces = {}
+                method_replaces = {}
+                done_methods = []
+                for method in file.methods:
+                    for hint in method.hints:
+                        apkmethod = apkdb.session.query(apkdb.Method).filter(apkdb.Method.id == hint).first()
+                        if apkmethod not in apkfile.methods or apkmethod.id in done_methods:
+                            continue
+                        done_methods.append(apkmethod.id)
+                        to_search = self.method_call_name.match(method.signature).group(1)
+                        method_name = self.method_name.match(method.signature).group(1)
+                        new_method_name = self.method_name.match(apkmethod.signature).group(1)
+                        print('> Changing Method', method.signature, 'to', method.signature.replace(method_name + '(', new_method_name + '('))
+                        print('In', file.get_full_package())
+                        method_replaces[method.signature] = \
+                            method.signature.replace(method_name + '(', new_method_name + '(')
+                        call_replaces[call_string_left + to_search] = \
+                            call_string_left + to_search.replace(method_name + '(', new_method_name + '(')
+                        break
+
+                # Replace method definitions
+                with open(file.get_full_path(), 'r') as f:
+                    content = f.read()
+                new_content = ''
+                change = False
+                for line in content.splitlines():
+                    search = self.to_avoid.findall(line)
+                    if len(search) == 0:
+                        # Replace the old method definition with the new one.
+                        # Method definitions look like: .method public static ... func_name(Param1Type, Param2Type);ReturnType
+                        t = line
+                        for from_replace, to_replace in method_replaces.items():
+                            t = t.replace(from_replace, to_replace)
+                        new_content += t
+                    else:
+                        new_content += line
+                    if len(line) > 0:
+                        new_content += os.linesep
+                if not new_content == content:
+                    change = True
+
+                if change:
+                    os.remove(file.get_full_path())
+                    with open(file.get_full_path(), 'w+') as f:
+                        f.write(new_content)
+
+                # Replace method calls
+                for r_file in eop.get_files():
+                    with open(r_file.get_full_path(), 'r') as f:
+                        content = f.read()
+                    new_content = ''
+                    change = False
+                    for line in content.splitlines():
+                        search = self.to_avoid.findall(line)
+                        if len(search) == 0:
+                            # Replace the old method call with the new one.
+                            # Method calls look like
+                            # L/package1/package2/Class;->methodname(Param1Type,Param2Type);ReturnType
+                            t = line
+                            for from_replace, to_replace in method_replaces.items():
+                                t = t.replace(from_replace, to_replace)
+                            new_content += t
+                        else:
+                            new_content += line
+                        if len(line) > 0:
+                            new_content += os.linesep
+                    if not new_content == content:
+                        change = True
+
+                    if change:
+                        os.remove(r_file.get_full_path())
+                        with open(r_file.get_full_path(), 'w+') as f:
+                            f.write(new_content)
 
 
+# self.method_call_name = re.compile(r'\s*.method\s(?:.*)(\w\(.*\).*)')
+#        self.method_name = re.compile(r'\s*.method\s(?:.*)(\w)\(.*\).*')
 '''
     def rename_function(self, package, java_class, function, new_name):
         raise NotImplementedError()
