@@ -29,3 +29,4 @@ The main script to run is deobfuspyor.py
 * -t to time an operation
 * -s to skip building and decompiling, -sb to only skip building, -sd to skip decompilation
 * -k to keep the files after everything's done. Will remove decompiled files otherwise
+* -m for manual / interactive mode (help the tool decide the packages when deobfuscating)
