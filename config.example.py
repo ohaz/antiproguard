@@ -4,9 +4,11 @@ __author__ = 'ohaz'
 
 # Database connectivity
 mysql = True
-engine_url = 'mysql+pymysql://<user>:<pass>@<host>/<db>'
-# Example for a sqlite database:
-# engine_url = 'sqlite:///apkdb.sqlite'
+if mysql:
+    engine_url = 'mysql+pymysql://<user>:<pass>@<host>/<db>'
+else:
+    # Example for a sqlite database:
+    engine_url = 'sqlite:///apkdb.sqlite'
 
 # The path to the apktool
 apk_tool_path = 'apktool.jar'
