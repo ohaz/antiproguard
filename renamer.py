@@ -37,7 +37,8 @@ class Renamer:
         Rename packages using their hints
         :return: void
         """
-        for eop in self.eops:
+        print('Renaming calls')
+        for eop in tqdm(self.eops):
             if len(eop.hints) == 0:
                 continue
             # Take the first hint, it's usually the correct one
@@ -46,7 +47,8 @@ class Renamer:
                 0].base_package
             # Rename all calls to this package
             self.rename_calls(eop.get_full_package(), other_package)
-        for eop in self.eops:
+        print('Changing package structure')
+        for eop in tqdm(self.eops):
             if len(eop.hints) == 0:
                 continue
             special = eop.search_special()
@@ -133,7 +135,7 @@ class Renamer:
         files = []
         for f_eop in self.eops:
             files.extend(f_eop.get_files())
-        for class_file in tqdm(files):
+        for class_file in files:
             # Looping over all files
             change = False
             with open(class_file.get_full_path(), 'r') as f:
