@@ -465,9 +465,9 @@ class Package:
         shorter = 0
         really_long = 0
         for f in files:
-            if len(f.get_class_name()) < 3:
+            if len(f.get_class_name()) < 5:
                 shorter += 1
-            elif len(f.get_class_name()) > 4:
+            elif len(f.get_class_name()) > 7:
                 really_long += 1
         return float(shorter) / float(len(files))
 
@@ -605,7 +605,7 @@ class File:
         A single file may not be obfuscated, even if the package is
         :return: boolean indicating whether this file seems to be obfuscated
         """
-        if len(self.get_class_name()) > 3:
+        if len(self.get_class_name()) > 4:
             return False
         return True
 

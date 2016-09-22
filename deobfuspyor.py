@@ -218,7 +218,18 @@ def new_analyze(path):
     # Iterate over all end-of-packages
     for eop in eops:
         # If this EOP doesn't seem to be obfuscated, we can save it in the database!
-        if eop.is_obfuscated() < 0.825:
+        force_run = False
+        force_skip = False
+        for force in base.force_deobfuscate:
+            if force.startswith(eop.get_full_package()):
+                force_run = True
+        for force in base.force_skip:
+            if force.startswith(eop.get_full_package()):
+                force_skip = True
+        if force_skip:
+            print(Fore.RED + '(Forced)', Fore.GREEN + 'Skipping:', eop.get_full_package())
+            continue
+        if eop.is_obfuscated() < 0.825 and not force_run:
             if not base.deobfuscate_only:
                 print(Fore.GREEN + 'Saving package to DB:', Fore.CYAN + eop.get_full_package() + Style.RESET_ALL)
                 for file in eop.get_files():
@@ -230,10 +241,12 @@ def new_analyze(path):
                 print('Skipping: ', eop.get_full_package(), ', it doesn\'t appear to be obfuscated')
             continue
         # If it's obfuscated, we should deobfuscate it
-        print(Fore.GREEN + 'Analyzing package:', Fore.CYAN + eop.get_full_package() + Style.RESET_ALL)
+        f = '' if not force_run else Fore.RED + '(Forced) ' + Style.RESET_ALL
+        print(f + Fore.GREEN + 'Analyzing package:', Fore.CYAN + eop.get_full_package() + Style.RESET_ALL)
         eop_suggestions = list()
         # Iterate over all files
-        for file in tqdm(eop.get_files()):
+        to_work = eop.child_files if eop.special else eop.get_files()
+        for file in tqdm(to_work):
             # set up file / methods for comparison
             file.generate_methods()
             for m in file.get_largest_function():
@@ -370,7 +383,7 @@ def dex_to_smali(dex, name):
     result_path = os.path.join(config.decompile_folder, name)
     out_path = os.path.join(result_path, 'smali')
     os.makedirs(out_path)
-    run(['java', '-jar', config.baksmali_path, '-o', out_path, dex])
+    run(['java', '-jar', config.baksmali_path, '-o', out_path, '-b', dex])
     return result_path
 
 
@@ -394,6 +407,8 @@ def main():
                         help='Interactively/Manually decide whether deobfuscation is correct')
     parser.add_argument('-t', '--time', dest='timed', action='store_true', help='Show required time')
     parser.add_argument('-i', '--insert', dest='insert', action='store_true', help='Insert jar or dex into database')
+    parser.add_argument('-f', '--force', dest='force_deobfuscate', nargs='+', type=str)
+    parser.add_argument('-fs', '--force-skip', dest='force_skip', nargs='+', type=str)
     args = parser.parse_args()
 
     # Initialize coloured output
@@ -416,6 +431,8 @@ def main():
     base.verbose = args.verbose
     base.deobfuscate_only = args.deobfuscate_only
     base.interactive = args.manually
+    base.force_deobfuscate = args.force_deobfuscate
+    base.force_skip = args.force_skip
 
     # Iterate over all apks/jars/dexs
     for apk in apks:
@@ -447,7 +464,7 @@ def main():
             shutil.rmtree(output_folder)
 
         if not args.skip_decompile:
-            run(['java', '-jar', config.apk_tool_path, '-o', output_folder, 'd', apk])
+            run(['java', '-jar', config.apk_tool_path, '-o', output_folder, '-b', 'd', apk])
             print(Fore.BLUE + '>> Decompiling to smali code done')
 
         print(Style.RESET_ALL)

@@ -12,6 +12,9 @@ deobfuscate_only = False
 
 interactive = False
 
+force_deobfuscate = []
+force_skip = []
+
 
 def find_class_paths(path):
     class_paths = []
