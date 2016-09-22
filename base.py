@@ -10,6 +10,8 @@ dot_id_counter = 0
 
 deobfuscate_only = False
 
+ignore_length = False
+
 interactive = False
 
 force_deobfuscate = []

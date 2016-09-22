@@ -288,7 +288,7 @@ def new_analyze(path):
             for lib in eop_suggestions:
                 other_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[
                     0].base_package
-                if package_length(eop.get_full_package()) != package_length(other_package):
+                if not base.ignore_length and package_length(eop.get_full_package()) != package_length(other_package):
                     continue
                 temp_suggestions.append(lib)
                 print('{})'.format(i), lib)
@@ -409,6 +409,7 @@ def main():
     parser.add_argument('-i', '--insert', dest='insert', action='store_true', help='Insert jar or dex into database')
     parser.add_argument('-f', '--force', dest='force_deobfuscate', nargs='+', type=str)
     parser.add_argument('-fs', '--force-skip', dest='force_skip', nargs='+', type=str)
+    parser.add_argument('-il', '--ignore-length', dest='ignore_length', action='store_true', help='Ignore package length')
     args = parser.parse_args()
 
     # Initialize coloured output
@@ -433,6 +434,7 @@ def main():
     base.interactive = args.manually
     base.force_deobfuscate = args.force_deobfuscate
     base.force_skip = args.force_skip
+    base.ignore_length = args.ignore_length
 
     # Iterate over all apks/jars/dexs
     for apk in apks:
