@@ -30,3 +30,6 @@ The main script to run is deobfuspyor.py
 * -s to skip building and decompiling, -sb to only skip building, -sd to skip decompilation
 * -k to keep the files after everything's done. Will remove decompiled files otherwise
 * -m for manual / interactive mode (help the tool decide the packages when deobfuscating)
+* -il to ignore package length when trying to deobfuscate packages
+* -f <a.b.c> <b.d.e> ... to force deobfuscation of certain packages (in java notation). Attention: use this parameter after the apk file!
+* -fs <a.b.c> <b.d.e> ... for force skipping deobfuscation of certain packages (in java notation). Attention: use this paramter after the apk file!
