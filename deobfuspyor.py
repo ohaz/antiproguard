@@ -432,8 +432,8 @@ def main():
     base.verbose = args.verbose
     base.deobfuscate_only = args.deobfuscate_only
     base.interactive = args.manually
-    base.force_deobfuscate = args.force_deobfuscate
-    base.force_skip = args.force_skip
+    base.force_deobfuscate = args.force_deobfuscate if args.force_deobfuscate is not None else []
+    base.force_skip = args.force_skip if args.force_skip is not None else []
     base.ignore_length = args.ignore_length
 
     # Iterate over all apks/jars/dexs
