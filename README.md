@@ -33,3 +33,4 @@ The main script to run is deobfuspyor.py
 * -il to ignore package length when trying to deobfuscate packages
 * -f <a.b.c> <b.d.e> ... to force deobfuscation of certain packages (in java notation). Attention: use this parameter after the apk file!
 * -fs <a.b.c> <b.d.e> ... for force skipping deobfuscation of certain packages (in java notation). Attention: use this paramter after the apk file!
+* -rr to do a top-down rerun after the bottom-up run. This increases the amount of files/methods renamed, but also increases false positive rate.
