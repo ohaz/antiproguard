@@ -29,8 +29,8 @@ class Renamer:
         # Avoid const-string replacements
         # This is so that things like String("La/b/c/d/"); don't get renamed
         self.to_avoid = re.compile(r'(\s*const-string[/jumbo]?\s.*,\s".*")')
-        self.method_call_name = re.compile(r'\s*.method\s(?:.*)(\w\(.*\).*)')
-        self.method_name = re.compile(r'\s*.method\s(?:.*)(\w)\(.*\).*')
+        self.method_call_name = re.compile(r'\s*.method(?:.*)\s(.*\(.*\).*)')
+        self.method_name = re.compile(r'\s*.method(?:.*)\s(.*)\(.*\).*')
 
     def rename_packages(self):
         """
@@ -167,7 +167,7 @@ class Renamer:
 
     def create_and_copy(self, old_path, new_path):
         """
-        Create a package with a deobfuscated name and copy all contens of the old one to the new one
+        Create a package with a deobfuscated name and copy all contents of the old one to the new one
         :param old_path: the path prior to the copy process
         :param new_path: the path post to the copy process
         :return: void
@@ -183,12 +183,14 @@ class Renamer:
         shutil.rmtree(old_path)
 
     def rename_methods(self):
+        """
+        Rename method definitions and calls to new name
+        :return: void
+        """
         for eop in self.eops:
             if len(eop.hints) == 0:
                 continue
             lib = eop.hints[0]
-            active_package = '.'.join([lib[0].base_package, lib[1].name]) if len(lib[1].name) > 0 else lib[
-                0].base_package
             for file in tqdm(eop.get_files()):
                 if not file.is_obfuscated_itself() or len(file.hints) == 0:
                     # Skip files that don't seem to be obfuscated
@@ -201,16 +203,18 @@ class Renamer:
                 method_replaces = {}
                 done_methods = []
                 for method in file.methods:
+                    if not method.is_significant() or 'constructor ' in method.signature or 'abstract ' in method.signature:
+                        continue
                     for hint in method.hints:
                         apkmethod = apkdb.session.query(apkdb.Method).filter(apkdb.Method.id == hint).first()
                         if apkmethod not in apkfile.methods or apkmethod.id in done_methods:
                             continue
                         done_methods.append(apkmethod.id)
-                        to_search = self.method_call_name.match(method.signature).group(1)
-                        method_name = self.method_name.match(method.signature).group(1)
-                        new_method_name = self.method_name.match(apkmethod.signature).group(1)
-                        print('> Changing Method', method.signature, 'to', method.signature.replace(method_name + '(', new_method_name + '('))
-                        print('In', file.get_full_package())
+                        to_search = self.method_call_name.match('.method '+method.signature).group(1)
+                        method_name = self.method_name.match('.method '+method.signature).group(1)
+                        new_method_name = self.method_name.match('.method '+apkmethod.signature).group(1)
+                        # print('> Changing Method', method.signature, 'to', method.signature.replace(method_name + '(', new_method_name + '('))
+                        # print('In', file.get_full_package())
                         method_replaces[method.signature] = \
                             method.signature.replace(method_name + '(', new_method_name + '(')
                         call_replaces[call_string_left + to_search] = \

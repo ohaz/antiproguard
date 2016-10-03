@@ -14,6 +14,8 @@ ignore_length = False
 
 interactive = False
 
+rerun = False
+
 force_deobfuscate = []
 force_skip = []
 

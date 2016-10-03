@@ -14,6 +14,7 @@ from elsim import SimHash
 import datetime
 import json
 from tqdm import tqdm
+import copy
 
 try:
     import config
@@ -215,6 +216,8 @@ def new_analyze(path):
     eops = root.find_eops()
     # Request all methods from the database
     q_methods = apkdb.session.query(apkdb.MethodVersion).all()
+
+    # Do a bottom-up run to get some first hints
     # Iterate over all end-of-packages
     for eop in eops:
         # If this EOP doesn't seem to be obfuscated, we can save it in the database!
@@ -295,16 +298,17 @@ def new_analyze(path):
                 i += 1
             if len(temp_suggestions) > 0:
                 if base.interactive:
-                        t = -2
-                        while t not in range(-1, len(temp_suggestions)):
-                            try:
-                                t = int(input('Which one do you want to use? [0 - {}] or -1 for None'.format(len(temp_suggestions) - 1)).strip())
-                            except ValueError:
-                                t = -2
-                        if t == -1:
-                            temp_suggestions = list()
-                        else:
-                            temp_suggestions[0], temp_suggestions[t] = temp_suggestions[t], temp_suggestions[0]
+                    t = -2
+                    while t not in range(-1, len(temp_suggestions)):
+                        try:
+                            t = int(input('Which one do you want to use? [0 - {}] or -1 for None'.format(
+                                len(temp_suggestions) - 1)).strip())
+                        except ValueError:
+                            t = -2
+                    if t == -1:
+                        temp_suggestions = list()
+                    else:
+                        temp_suggestions[0], temp_suggestions[t] = temp_suggestions[t], temp_suggestions[0]
             else:
                 print(Fore.CYAN + 'EOP', eop.get_full_package(), 'could', Fore.RED + 'not' + Fore.CYAN,
                       'be deobfuscated :(' + Style.RESET_ALL)
@@ -313,22 +317,132 @@ def new_analyze(path):
             print(Fore.CYAN + 'EOP', eop.get_full_package(), 'could', Fore.RED + 'not' + Fore.CYAN,
                   'be deobfuscated :(' + Style.RESET_ALL)
 
-    # For debugging help, or if someone needs the hints for a different program, we print it out as a json file
-    with open('hints.json', 'w+') as f:
-        js = {}
+    if base.rerun:
+        # Do a top-down rerun to increase the amount of renamed classes/methods!
+        # May lead to less exact results though!
         for eop in eops:
-            js[eop.get_full_package()] = eop.get_hints()
-        json.dump(js, f, sort_keys=True, indent=4)
+            if len(eop.hints) == 0:
+                continue
+            hint_taken = eop.hints[0][1]
+            probability_map = {f: [] for f in eop.get_files()}
+            for file in eop.get_files():
+                for hint_file in hint_taken.files:
+                    mapper = {}
+                    chance = None
+                    for method in file.methods:
+                        param_amount = len(method.get_params())
+                        if not method.is_significant() or 'constructor ' in method.signature or 'abstract ' in method.signature:
+                            continue
+                        method_max = -1
+                        method_max_m = None
+                        for hint_method in hint_file.methods:
+                            if param_amount != len((hint_method.to_apk_method()).get_params()):
+                                continue
+                            version_max = -1
+                            for hint_method_version in hint_method.method_versions:
+                                sim_weak = method.elsim_similarity_weak_instructions().similarity(
+                                    SimHash.from_string(hint_method_version.elsim_instr_weak_hash))
+                                if sim_weak > version_max:
+                                    version_max = sim_weak
+                            if version_max > method_max:
+                                method_max = version_max
+                                method_max_m = hint_method
+                        mapper[method] = (method_max, method_max_m)
+                        if chance is None:
+                            chance = method_max
+                        else:
+                            chance = chance * method_max
+                    if chance is not None:
+                        probability_map[file].append((chance, hint_file, mapper))
+            for file in probability_map.keys():
+                probability_map[file] = sorted(probability_map[file], key=lambda x: x[0], reverse=True)
+            result_map = {f: None for f in eop.get_files()}
+            unused_files = copy.copy(hint_taken.files)
+
+            def set_and_compare_classes(f_prop, hint_list_prop):
+                for hint_prop in hint_list_prop:
+                    if hint_prop[1] in unused_files:
+                        result_map[f_prop] = hint_prop
+                    else:
+                        swap = None
+                        for key, value in result_map.items():
+                            if value[1] == hint_prop[1]:
+                                if value[0] < hint_prop[0]:
+                                    swap = key
+                                    break
+                        if swap is None:
+                            continue
+                        result_map[f_prop] = hint_prop
+                        result_map[swap] = None
+                        set_and_compare_classes(swap, probability_map[swap])
+
+            for f, hint_list in probability_map.items():
+                if not len(hint_list):
+                    continue
+                set_and_compare_classes(f, hint_list)
+
+            for f, hints in result_map.items():
+                if hints is None:
+                    continue
+                if not len(f.hints):
+                    f.hints.append(hints[1].id)
+                    for method in f.methods:
+                        if len(method.hints) == 0 and method in hints[2].keys():
+                            if hints[2][method] is None or hints[2][method][1] is None:
+                                continue
+                            method.hints.append(hints[2][method][1].id)
+
+            """for f, hint_list in probability_map.items():
+                if not len(hint_list):
+                    continue
+                if result_map[f] is None:
+                    result_map[f] = hint_list[0]
+                else:
+                    if hint_list[0][0] > result_map[f]:
+                        result_map[f] = hint_list[0]
+            values_done = []
+            for key, value in result_map.items():
+                if value not in values_done:
+                    values_done.append(value)
+                else:
+                    result_map[key] = None
+            for value in result_map.values():
+                methods_done = []
+                if value is None:
+                    continue
+                for key, method in value[2].items():
+                    if method[1] not in methods_done:
+                        methods_done.append(method[1])
+                    else:
+                        value[2][key] = None
+            for file, hints in result_map.items():
+                if hints is None:
+                    continue
+                if len(file.hints) == 0:
+                    file.hints.append(hints[1].id)
+                    for method in file.methods:
+                        if len(method.hints) == 0 and method in hints[2].keys():
+                            if hints[2][method] is None or hints[2][method][1] is None:
+                                continue
+                            method.hints.append(hints[2][method][1].id)"""
+
     # Let's start renaming. We rename bottom-up, because that makes renaming a lot easier
     # since we don't really have to memorize what we've already done and how it was called before
     print(Fore.BLUE + 'Starting Renaming process...' + Style.RESET_ALL)
     renamer = Renamer(root, eops)
-    print(Fore.CYAN + 'Renaming methods and methodcalls' + Style.RESET_ALL)
+    print(Fore.CYAN + 'Renaming methods and Method-Calls' + Style.RESET_ALL)
     renamer.rename_methods()
-    print(Fore.CYAN + 'Renaming Classes and Class Calls' + Style.RESET_ALL)
+    print(Fore.CYAN + 'Renaming Classes and Class-Calls' + Style.RESET_ALL)
     renamer.rename_classes()
-    print(Fore.CYAN + 'Renaming Packages and Package Calls' + Style.RESET_ALL)
+    print(Fore.CYAN + 'Renaming Packages and Package-Calls' + Style.RESET_ALL)
     renamer.rename_packages()
+
+    # For debugging help, or if someone needs the hints for a different program, we return the hints so that they can be
+    # saved to a file.
+    js = {}
+    for eop in eops:
+        js[eop.get_full_package()] = eop.get_hints()
+    return js
 
 
 def insert_only(path):
@@ -409,7 +523,11 @@ def main():
     parser.add_argument('-i', '--insert', dest='insert', action='store_true', help='Insert jar or dex into database')
     parser.add_argument('-f', '--force', dest='force_deobfuscate', nargs='+', type=str)
     parser.add_argument('-fs', '--force-skip', dest='force_skip', nargs='+', type=str)
-    parser.add_argument('-il', '--ignore-length', dest='ignore_length', action='store_true', help='Ignore package length')
+    parser.add_argument('-il', '--ignore-length', dest='ignore_length', action='store_true',
+                        help='Ignore package length')
+    parser.add_argument('-rr', '-rerun', dest='rerun', action='store_true', help='Do a top-down rerun to increase the'
+                                                                                 'amount of files/methods renamed.'
+                                                                                 'May lead to wrong results!')
     args = parser.parse_args()
 
     # Initialize coloured output
@@ -429,6 +547,7 @@ def main():
     else:
         apks = [apk_paths]
 
+    base.rerun = args.rerun
     base.verbose = args.verbose
     base.deobfuscate_only = args.deobfuscate_only
     base.interactive = args.manually
@@ -471,7 +590,9 @@ def main():
 
         print(Style.RESET_ALL)
         # This calls the analyze method:
-        new_analyze(os.path.join(os.getcwd(), output_folder))
+        js = new_analyze(os.path.join(os.getcwd(), output_folder))
+        with open(os.path.basename(apk)[:-4] + '_hints.json', 'w+') as f:
+            json.dump(js, f, sort_keys=True, indent=4)
         print(Fore.GREEN + '---------------------------------------------')
         print('Done deobfuscating...' + Style.RESET_ALL)
 
