@@ -1,4 +1,4 @@
-# deobfuspyor is a WIP Name. Will change before Release!
+# Deguard
 
 ## Setup
 
@@ -17,12 +17,12 @@
 
 ## Usage
 
-The main script to run is deobfuspyor.py
+The main script to run is deguard.py
 ### Basic usage guide:
 
-* If you want to add a jar/dex file to the database, run `python deobfuspyor.py -i <file.jar/file.dex>` (this requires the android SDK to be installed)
-* If you want to add a whole, unobfuscated apk to the database, run `python deobfuspyor.py -sb -t <file.apk>`
-* If you want to deobfuscate an apk, run `python deobfuspyor.py -d <file.apk>` The result is called "[file_name].deobfuscated.apk"
+* If you want to add a jar/dex file to the database, run `python deguard.py -i <file.jar/file.dex>` (this requires the android SDK to be installed)
+* If you want to add a whole, unobfuscated apk to the database, run `python deguard.py -sb -t <file.apk>`
+* If you want to deobfuscate an apk, run `python deguard.py -d <file.apk>` The result is called "[file_name].deobfuscated.apk"
 
 ### Additional parameters:
 

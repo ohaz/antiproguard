@@ -392,40 +392,6 @@ def new_analyze(path):
                                 continue
                             method.hints.append(hints[2][method][1].id)
 
-            """for f, hint_list in probability_map.items():
-                if not len(hint_list):
-                    continue
-                if result_map[f] is None:
-                    result_map[f] = hint_list[0]
-                else:
-                    if hint_list[0][0] > result_map[f]:
-                        result_map[f] = hint_list[0]
-            values_done = []
-            for key, value in result_map.items():
-                if value not in values_done:
-                    values_done.append(value)
-                else:
-                    result_map[key] = None
-            for value in result_map.values():
-                methods_done = []
-                if value is None:
-                    continue
-                for key, method in value[2].items():
-                    if method[1] not in methods_done:
-                        methods_done.append(method[1])
-                    else:
-                        value[2][key] = None
-            for file, hints in result_map.items():
-                if hints is None:
-                    continue
-                if len(file.hints) == 0:
-                    file.hints.append(hints[1].id)
-                    for method in file.methods:
-                        if len(method.hints) == 0 and method in hints[2].keys():
-                            if hints[2][method] is None or hints[2][method][1] is None:
-                                continue
-                            method.hints.append(hints[2][method][1].id)"""
-
     # Let's start renaming. We rename bottom-up, because that makes renaming a lot easier
     # since we don't really have to memorize what we've already done and how it was called before
     print(Fore.BLUE + 'Starting Renaming process...' + Style.RESET_ALL)
