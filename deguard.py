@@ -29,6 +29,7 @@ __author__ = 'ohaz'
 def run(cmd):
     """
     Simple method to run subprocesses. Was added in case the command needs to be reworked
+    
     :param cmd: the command to run, as a list
     :return: void
     """
@@ -39,6 +40,7 @@ def search_mains(xml_root):
     """
     Searches an xml root for the main activities of an app
     Probably not the best way to do it, but it works
+    
     :param xml_root: the root node of the xml file
     :return: a list of main activities
     """
@@ -60,6 +62,7 @@ def search_mains(xml_root):
 def recursive_iterate(parent):
     """
     Recursively iterate a parent and add subpackages or subfiles to the current parent
+    
     :param parent: the parent node
     :return: void
     """
@@ -78,6 +81,7 @@ def recursive_iterate(parent):
 def new_iterate(path):
     """
     Iterate a path and build up the package/file tree
+    
     :param path: the path to the unpacked apk
     :return: the root node of the package/file tree
     """
@@ -99,6 +103,7 @@ def new_iterate(path):
 def compare(method, all_methods=None, hints=None):
     """
     Compare a method all methods shown in the all_methods parameter. Also take hints into account
+    
     :param method: The method to compare
     :param all_methods: The methods to compare to.
     :param hints: The hints. If this list is None, it'll compare to all methods that exist in the DB.
@@ -167,6 +172,7 @@ def compare(method, all_methods=None, hints=None):
 def deeplen(l):
     """
     Helper method to know if an element in a list of lists has elements
+    
     :param l: the list
     :return: boolean, indicating whether or not an element in a list of lists has elements
     """
@@ -179,6 +185,7 @@ def deeplen(l):
 def package_length(p):
     """
     Get the length of a package in java notation
+   
     :param p: the package as a string
     :return: the length of the package
     """
@@ -188,6 +195,7 @@ def package_length(p):
 def new_analyze(path):
     """
     This method does all the top-level comparisons
+    
     :param path: the path to analyze
     :return: void
     """
@@ -414,6 +422,7 @@ def new_analyze(path):
 def insert_only(path):
     """
     Inserts undexed packages into the database
+    
     :param path: The path to the smali folder
     :return: void
     """
@@ -431,6 +440,7 @@ def insert_only(path):
 def jar_to_dex(jar_file, name):
     """
     Uses dx to create a dex file from a jar file
+    
     :param jar_file: The jar file
     :param name: The name the output is supposed to have
     :return: path to the dex file
@@ -452,6 +462,7 @@ def jar_to_dex(jar_file, name):
 def dex_to_smali(dex, name):
     """
     Uses baksmali to create smali files from a dex file
+    
     :param dex: the path to the dex file
     :param name: the name the output is supposed to have
     :return: path to the analyzable tree
@@ -470,6 +481,7 @@ def dex_to_smali(dex, name):
 def main():
     """
     Main Method. Reads input and calls deobfuscation method for all apks
+    
     :return: void
     """
     parser = argparse.ArgumentParser(description='Deobfuscate Android Applications')

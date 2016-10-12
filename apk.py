@@ -334,6 +334,7 @@ class Package:
     def __init__(self, name, parent=None, special=False):
         """
         Init Method for a java package folder
+
         :param name: the name of the folder/package
         :param parent: the parent folder/package
         :param special: used to show non-java related folders, e.g. smali and root
@@ -352,6 +353,7 @@ class Package:
     def get_hints(self):
         """
         Gets the 'hints' for this Package in dict format
+
         :return: a dict with the hints for this package
         """
         value = dict()
@@ -369,6 +371,7 @@ class Package:
     def search_special(self):
         """
         Searches for a special package, bottom-up
+
         :return: the first special node found
         """
         if self.special:
@@ -378,6 +381,7 @@ class Package:
     def save_to_db(self):
         """
         Save this package to the database
+
         :return: void
         """
         lib = apkdb.session.query(apkdb.Library).filter(apkdb.Library.base_package == self.get_full_package()).first()
@@ -391,6 +395,7 @@ class Package:
     def iterate_end_of_packages(self):
         """
         Finds the first package that contains a file
+
         :return: void
         """
         if len(self.child_files) > 0:
@@ -403,6 +408,7 @@ class Package:
     def find_eops(self):
         """
         Returns all EOPs in the children of this node
+
         :return: List of EOPs
         """
         if self.is_eop:
@@ -420,6 +426,7 @@ class Package:
     def get_files(self):
         """
         Gets all files in this package and all its sub packages
+        
         :return: a list of File objects
         """
         files = []
@@ -432,6 +439,7 @@ class Package:
     def set_special_path(self, path):
         """
         Set a special path, e.g. for smali or root "Packages"
+        
         :param path: the special path
         :return: void
         """
@@ -442,6 +450,7 @@ class Package:
     def add_child_file(self, child):
         """
         Appends a child File object to the list of file children
+        
         :param child: a File object
         :return: void
         """
@@ -450,6 +459,7 @@ class Package:
     def add_child_package(self, child):
         """
         Appends a child Package object to the list of package children
+        
         :param child: a Package object
         :return: void
         """
@@ -459,6 +469,7 @@ class Package:
         """
         Tests via package name length if this package may be obfuscated.
         Class names with 1 or 2 characters length are considered obfuscated
+        
         :return: a float that shows how high the chance for this package to be obfuscated is
         """
         files = self.get_files()
@@ -474,6 +485,7 @@ class Package:
     def get_full_path(self):
         """
         Get the full path in the filesystem, to make opening files for reading/writing easier
+        
         :return: the full path to the file
         """
         if self.special:
@@ -484,6 +496,7 @@ class Package:
     def get_path(self):
         """
         Get the internal path to the package
+        
         :return: the path including all not-special parents
         """
         if self.special:  # May need if self.parent.special
@@ -494,6 +507,7 @@ class Package:
     def get_full_package(self):
         """
         Java-like path/package presentation, using dots instead of os separators
+        
         :return: dot-style path representation
         """
         parent = ''
@@ -505,6 +519,7 @@ class Package:
         """
         Java-like path/package presentation, using dots instead of os seperators
         leaves out the base package
+        
         :return: dot-style path representation
         """
         if self.is_eop:
@@ -517,6 +532,7 @@ class Package:
     def pprint(self):
         """
         Prettyprints this package and all sub packages
+        
         :return: void
         """
         print('Package:')
@@ -531,6 +547,7 @@ class Package:
     def graph(self, dot, p, root=False, include_files=False):
         """
         Make a dot graph of this package
+        
         :param dot: the dot graph
         :param p: the parent
         :param root: boolean flag to know whether this node is the root node
@@ -553,6 +570,7 @@ class File:
     def __init__(self, name, parent):
         """
         Class representing a Smali Code File
+        
         :param name: the Name of the file
         :param parent: The package the file is in
         """
@@ -566,6 +584,7 @@ class File:
     def get_hints(self):
         """
         Gets the 'hints' for this file in dict format
+        
         :return: a dict with the hints for this file
         """
         value = dict()
@@ -584,6 +603,7 @@ class File:
     def save_to_db(self, lib):
         """
         Saves this file to the database
+        
         :param lib: the parent library that contains this file
         :return: void
         """
@@ -603,6 +623,7 @@ class File:
     def is_obfuscated_itself(self):
         """
         A single file may not be obfuscated, even if the package is
+        
         :return: boolean indicating whether this file seems to be obfuscated
         """
         if len(self.get_class_name()) > 4:
@@ -612,6 +633,7 @@ class File:
     def get_path(self):
         """
         Get the internal path to the file
+        
         :return: the path including all not-special parents
         """
         return os.path.join(self.parent.get_path(), self.name)
@@ -619,6 +641,7 @@ class File:
     def get_full_path(self):
         """
         Get the full path in the filesystem, to make opening files for reading/writing easier
+        
         :return: the full path to the file
         """
         return os.path.join(self.parent.get_full_path(), self.name)
@@ -627,6 +650,7 @@ class File:
         """
         Gets the name of the class, usually filename -5 characters (for .smali)
         This may have to be fixed in the future, by reading out the actual name of the class
+        
         :return: A string containing the Classname
         """
         return self.name[:-6]
@@ -634,6 +658,7 @@ class File:
     def get_full_package(self):
         """
         Java-like path/package presentation, using dots instead of os separators
+        
         :return: dot-style path representation
         """
         return '.'.join([self.parent.get_full_package(), self.get_class_name()])
@@ -642,6 +667,7 @@ class File:
         """
         Java-like path/package presentation, using dots instead of os seperators
         leaves out the base package
+        
         :return: dot-style path representation
         """
         if self.parent.is_eop:
@@ -653,6 +679,7 @@ class File:
         """
         Tests via package name length if the package this file is in may be obfuscated.
         package names with 1 or 2 characters length are considered obfuscated
+        
         :return: a float that shows how high the chance for this package to be obfuscated is
         """
         return self.parent.is_obfuscated()
@@ -660,6 +687,7 @@ class File:
     def generate_methods(self):
         """
         Reads out all methods from the smali file
+        
         :return: a list of method objects
         """
         with open(self.get_full_path(), 'r') as f:
@@ -672,6 +700,7 @@ class File:
     def get_largest_function(self):
         """
         A generator that contains the functions, ordered by size. Only works after calling generate_methods()
+        
         :return: generator for the functions
         """
         yield from sorted(self.methods, key=lambda method: method.length, reverse=True)
@@ -679,6 +708,7 @@ class File:
     def generate_basic_blocks(self):
         """
         Generates the basic block structures for all methods in this file
+        
         :return: void
         """
         methods = self.methods
@@ -690,6 +720,7 @@ class File:
     def generate_ngrams(self, n=3, intersect=True):
         """
         Generates the n-grams for all methods in this file
+        
         :param n: the length of a gram
         :param intersect: indicates whether n-grams should have intersections (ABCD -> AB, BC, CD or AB, CD)
         :return: void
@@ -703,6 +734,7 @@ class File:
     def generate_sim_hashes(self):
         """
         Helper method to generate similarity hashes with elsim simhash
+        
         :return:
         """
         methods = self.methods
@@ -715,6 +747,7 @@ class File:
     def pprint(self):
         """
         Prettyprints the file
+        
         :return: void
         """
         print('File:')
@@ -724,6 +757,7 @@ class File:
     def graph(self, dot, p):
         """
         Make a dot graph of this file
+        
         :param dot: the dot graph
         :param p: the parent
         :return: void
@@ -738,6 +772,7 @@ class Method:
     def __init__(self, file, signature, instructions):
         """
         Representation of a method
+        
         :param file: the file this method is in
         :param signature: the signature of this method
         :param instructions: the bytecode/smali instructions in this method
@@ -758,6 +793,7 @@ class Method:
     def get_name(self):
         """
         Signature of this Method
+        
         :return: string showing the signature
         """
         return self.signature
@@ -765,6 +801,7 @@ class Method:
     def set_name(self, name):
         """
         Set the signature of this method
+        
         :param name: the new signature
         :return: void
         """
@@ -775,6 +812,7 @@ class Method:
     def get_length(self):
         """
         Gets the length of this method, just instructions
+        
         :return: integer containing the length of this method
         """
         return len([x for x in self.instr_stripped if not x.startswith('.')])
@@ -782,6 +820,7 @@ class Method:
     def instr_stripped_gen(self):
         """
         generator for stripped down instructions
+        
         :return: a list of instructions without empty lines and leading spaces
         """
         yield from [x.strip() for x in self.instructions.splitlines() if len(x.strip()) > 0]
@@ -791,6 +830,7 @@ class Method:
     def get_params(self):
         """
         Get a list of parameters for this function, containing both native parameters as well es objects
+        
         :return: A list of parameters
         """
         prims = ['Z', 'B', 'S', 'C', 'I', 'J', 'F', 'D']
@@ -814,6 +854,7 @@ class Method:
     def save_to_db(self, file):
         """
         Save this Method to the database, only if it's neither constructor nor abstract
+        
         :param file: The file this method belongs to
         :return: void
         """
@@ -841,6 +882,7 @@ class Method:
     def pprint(self):
         """
         Prettyprints this method
+        
         :return: void
         """
         print(self.signature, 'in', self.file.name)
@@ -848,6 +890,7 @@ class Method:
     def generate_ngrams_old(self, n=2, intersect=True):
         """
         Generates n-grams for this method.
+        
         :param n: the length of a gram
         :param intersect: indicates whether n-grams should have intersections (ABCD -> AB, BC, CD or AB, CD)
         :return: void
@@ -893,6 +936,7 @@ class Method:
     def generate_ngrams(self, n=3, intersect=True):
         """
         Generates n-grams for this method.
+        
         :param n: the length of a gram
         :param intersect: indicates whether n-grams should have intersections (ABCD -> AB, BC, CD or AB, CD)
         :return: void
@@ -938,6 +982,7 @@ class Method:
     def is_significant(self):
         """
         A method is only significant if it contains more than 2 ngrams
+        
         :return: boolean showing if this method is significant
         """
         if len(self.ngrams) > 2:
@@ -947,6 +992,7 @@ class Method:
     def elsim_similarity_ngram(self):
         """
         generates the elsim hash for the ngrams
+        
         :return: the elsim hash
         """
         if self.elsim_ngram_hash is None:
@@ -956,6 +1002,7 @@ class Method:
     def elsim_similarity_instructions(self):
         """
         generates the elsim hash for the instructions
+        
         :return: the elsim hash
         """
         if self.elsim_instructions_hash is None:
@@ -965,6 +1012,7 @@ class Method:
     def elsim_similarity_nodot_instructions(self):
         """
         generates the elsim hash for the instructions that don't start with a .
+        
         :return: the elsim hash
         """
         if self.elsim_instr_nodot_hash is None:
@@ -975,6 +1023,7 @@ class Method:
         """
         generates the elsim hash for the instructions that don't start with a ., and only contains the instructions themselves,
         not parameters of them
+        
         :return: the elsim hash
         """
         if self.elsim_instr_weak_hash is None:
@@ -988,6 +1037,7 @@ class Method:
     def generate_basic_blocks(self, invoke_ends=False):
         """
         Generates the basic block structures for this method.
+        
         :return: void
         """
         enders = ['return', 'goto', 'throw', 'if-', 'packed-switch', 'sparse-switch']
@@ -1031,6 +1081,7 @@ class Method:
     def build_cfg(self):
         """
         Build a CFG using the BasicBlocks
+        
         :return: void
         """
         for block in self.basic_blocks:
@@ -1060,6 +1111,7 @@ class BasicBlock:
     def __init__(self, method, instructions, prev_bb, next_bb=None, parents=None, children=None):
         """
         Representation of a basic block.
+        
         :param method: The method this BB belongs to
         :param instructions: The instructions included in this BB
         :param prev_bb: The basic block that is in front of this BB in the code
@@ -1080,6 +1132,7 @@ class BasicBlock:
     def graph(self, dot, done=None):
         """
         Make a dot graph of this BasicBlock and all its children
+        
         :param dot: the dot graph
         :param done: a list of blcoks already visited
         :return: void
@@ -1095,6 +1148,7 @@ class BasicBlock:
     def pprint(self):
         """
         Pretty Prints this Basic block
+        
         :return: void
         """
         print(self.parents, self.children)
@@ -1103,6 +1157,7 @@ class BasicBlock:
     def ends_unconditional(self):
         """
         Checks if this block ends with an unconditional jump
+        
         :return: boolean that shows if this block ends with an unconditional jump
         """
         ll = self.instructions[-1].strip()
@@ -1114,6 +1169,7 @@ class BasicBlock:
         """
         Returns a list of all markers that can start this block.
         Should always be a list with only 1 element, otherwise something went horribly wrong
+        
         :return: a list of markers
         """
         starters = []
@@ -1127,6 +1183,7 @@ class BasicBlock:
         """
         Returns a list of all targets this basic blocks can jump to.
         Should always be a list with only 1 element, otherwise something went horribly wrong
+        
         :return: a list of targets
         """
         targets = []
@@ -1152,6 +1209,7 @@ class BasicBlock:
         """
         Creates a new block only if the amount of instructions is at least 1.
         This is used as a convenience function to make creating the BBs easier
+        
         :param method: The method this BB belongs to
         :param instructions: The instructions included in this BB
         :param prev_bb: The basic block that is in front of this BB in the code

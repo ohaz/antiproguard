@@ -21,6 +21,7 @@ class Renamer:
     def __init__(self, root, eops):
         """
         Initializes a new Renamer
+        
         :param root: The root node of a package/file tree
         :param eops: A list of eops
         """
@@ -35,6 +36,7 @@ class Renamer:
     def rename_packages(self):
         """
         Rename packages using their hints
+        
         :return: void
         """
         print('Renaming calls')
@@ -62,6 +64,7 @@ class Renamer:
     def rename_classes(self):
         """
         Rename Classes using their hints
+        
         :return: void
         """
         for eop in tqdm(self.eops):
@@ -93,6 +96,7 @@ class Renamer:
     def rename_this_file(self, file, new, apkfile_package_name):
         """
         Rename this file to a new name
+        
         :param file: the file to rename
         :param new: the new file (from db)
         :param apkfile_package_name: the package of the apkfile
@@ -128,6 +132,7 @@ class Renamer:
     def rename_calls(self, old_package, new_package):
         """
         Rename calls targeted on the old package to the new package
+        
         :param old_package: the old package, prior to renaming
         :param new_package: the new package, post renaming
         :return: void
@@ -168,6 +173,7 @@ class Renamer:
     def create_and_copy(self, old_path, new_path):
         """
         Create a package with a deobfuscated name and copy all contents of the old one to the new one
+        
         :param old_path: the path prior to the copy process
         :param new_path: the path post to the copy process
         :return: void
@@ -185,6 +191,7 @@ class Renamer:
     def rename_methods(self):
         """
         Rename method definitions and calls to new name
+        
         :return: void
         """
         for eop in self.eops:
