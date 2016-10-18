@@ -9,6 +9,7 @@ from base import verbose
 from distutils import dir_util
 import shutil
 import apkdb
+import logging
 
 __author__ = 'ohaz'
 
@@ -32,6 +33,7 @@ class Renamer:
         self.to_avoid = re.compile(r'(\s*const-string[/jumbo]?\s.*,\s".*")')
         self.method_call_name = re.compile(r'\s*.method(?:.*)\s(.*\(.*\).*)')
         self.method_name = re.compile(r'\s*.method(?:.*)\s(.*)\(.*\).*')
+        logging.basicConfig(filename='changes.log', level=logging.DEBUG)
 
     def rename_packages(self):
         """
@@ -60,6 +62,7 @@ class Renamer:
             other_path = other_package.replace('.', os.sep)
             # Move the package to it's new location
             self.create_and_copy(eop.get_full_path(), os.path.join(special.get_full_path(), other_path))
+            logging.info('PACKAGE_RENAME: ' + eop.get_full_path() + ' TO ' + other_package)
 
     def rename_classes(self):
         """
@@ -90,6 +93,7 @@ class Renamer:
                     old_package = file.get_full_package()
                     # Rename this file and rename all calls to this file
                     if self.rename_this_file(file, apkfile, apkfile_package_name):
+                        logging.info('CLASS_RENAME: ' + old_package + ' TO ' + apkfile_package_name + '.' + apkfile.name)
                         file_ids_done.append(hint)
                         self.rename_calls(old_package, apkfile_package_name + '.' + apkfile.name)
 
@@ -222,6 +226,7 @@ class Renamer:
                         new_method_name = self.method_name.match('.method '+apkmethod.signature).group(1)
                         # print('> Changing Method', method.signature, 'to', method.signature.replace(method_name + '(', new_method_name + '('))
                         # print('In', file.get_full_package())
+                        logging.info('METHOD_RENAME: ' + method_name + ' IN ' + file.get_full_path() + ' TO ' + new_method_name)
                         method_replaces[method.signature] = \
                             method.signature.replace(method_name + '(', new_method_name + '(')
                         call_replaces[call_string_left + to_search] = \
@@ -267,7 +272,7 @@ class Renamer:
                             # Method calls look like
                             # L/package1/package2/Class;->methodname(Param1Type,Param2Type);ReturnType
                             t = line
-                            for from_replace, to_replace in method_replaces.items():
+                            for from_replace, to_replace in call_replaces.items():
                                 t = t.replace(from_replace, to_replace)
                             new_content += t
                         else:
@@ -281,40 +286,3 @@ class Renamer:
                         os.remove(r_file.get_full_path())
                         with open(r_file.get_full_path(), 'w+') as f:
                             f.write(new_content)
-
-
-# self.method_call_name = re.compile(r'\s*.method\s(?:.*)(\w\(.*\).*)')
-#        self.method_name = re.compile(r'\s*.method\s(?:.*)(\w)\(.*\).*')
-'''
-    def rename_function(self, package, java_class, function, new_name):
-        raise NotImplementedError()
-
-        pattern = re.compile(r'\.method\s(public|private|protected)*\s*(static)*\s*([\w\s<>;]*)\((.*)\)(.*)')
-        path = os.sep.join(package)
-        location = [x for x in self.to_read if x[1] == java_class + '.smali' and x[2] == path]
-        if len(location) > 1 or len(location) == 0:
-            print('Function not unique or not found. What do?')
-            return
-        location = location[0]
-        print(location)
-        replaces = []
-        with open(os.path.join(location[0], location[1]), 'r') as f:
-            content = f.read()
-            search = pattern.findall(content)
-            for result in search:
-                if result[2] == function:
-                    static_append = ''
-                    if not result[1] == '':
-                        static_append = ' ' + result[1]
-                    replaces.append(
-                        (
-                            '.method {}{} {}({}){}'.format(result[0], static_append, result[2], result[3], result[4]),
-                            '.method {}{} {}({}){}'.format(result[0], static_append, new_name, result[3], result[4])
-                         )
-                    )
-        for replace in replaces:
-            content = content.replace(replace[0], replace[1])
-        os.remove(os.path.join(location[0], location[1]))
-        with open(os.path.join(location[0], location[1]), 'a+') as f:
-            f.write(content)
-'''

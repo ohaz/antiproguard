@@ -123,6 +123,7 @@ class MethodVersion(Base):
         """
         Generate a apk Method to be able to do functionality on the method signature, instead of having to
         implement all functions twice
+        
         :return: object of apk.Method
         """
         return apk.Method(None, self.method.signature, None)
