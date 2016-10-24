@@ -95,7 +95,7 @@ class Renamer:
                     if self.rename_this_file(file, apkfile, apkfile_package_name):
                         logging.info('CLASS_RENAME: ' + old_package + ' TO ' + apkfile_package_name + '.' + apkfile.name)
                         file_ids_done.append(hint)
-                        self.rename_calls(old_package, apkfile_package_name + '.' + apkfile.name)
+                        self.rename_calls(old_package, apkfile_package_name + '.' + apkfile.name, ender=';')
 
     def rename_this_file(self, file, new, apkfile_package_name):
         """
@@ -133,7 +133,7 @@ class Renamer:
             return True
         return False
 
-    def rename_calls(self, old_package, new_package):
+    def rename_calls(self, old_package, new_package, ender='/'):
         """
         Rename calls targeted on the old package to the new package
         
@@ -156,8 +156,8 @@ class Renamer:
                         # Replace the old package name with the new one.
                         # Packages have the format La/b/c/d/e;
                         # with e being the class and a,b,c,d being packages and subpackages
-                        new_content += line.replace('L' + '/'.join(old_package.split('.')) + '/',
-                                                    'L' + '/'.join(new_package.split('.')) + '/')
+                        new_content += line.replace('L' + '/'.join(old_package.split('.')) + ender,
+                                                    'L' + '/'.join(new_package.split('.')) + ender)
                     else:
                         new_content += line
                     if len(line) > 0:
