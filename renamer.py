@@ -34,6 +34,7 @@ class Renamer:
         self.method_call_name = re.compile(r'\s*.method(?:.*)\s(.*\(.*\).*)')
         self.method_name = re.compile(r'\s*.method(?:.*)\s(.*)\(.*\).*')
         logging.basicConfig(filename='changes.log', level=logging.DEBUG)
+        logging.info('------------ Deobfuscating ------------')
 
     def rename_packages(self):
         """
@@ -91,9 +92,15 @@ class Renamer:
                     if apkfile_package_name != active_package:
                         continue
                     old_package = file.get_full_package()
+                    if len(old_package.split('.')) - 1 != len(apkfile_package_name.split('.')):
+                        logging.info(
+                            'CLASS_RENAME_ALMOST: Wanted to rename ' + old_package + ' TO ' + apkfile_package_name + '.'
+                            + apkfile.name + ' but couldn\'t!')
+                        continue
                     # Rename this file and rename all calls to this file
                     if self.rename_this_file(file, apkfile, apkfile_package_name):
-                        logging.info('CLASS_RENAME: ' + old_package + ' TO ' + apkfile_package_name + '.' + apkfile.name)
+                        logging.info(
+                            'CLASS_RENAME: ' + old_package + ' TO ' + apkfile_package_name + '.' + apkfile.name)
                         file_ids_done.append(hint)
                         self.rename_calls(old_package, apkfile_package_name + '.' + apkfile.name, ender=';')
 
@@ -113,7 +120,10 @@ class Renamer:
         old_package_in_path = '/'.join(old_package.split('.'))
         old_replace = 'L' + old_package_in_path + ';'
         new_filename = os.path.join(os.path.dirname(file.get_full_path()), new.name + '.smali')
-        if os.path.exists(new_filename):
+        root = file.search_special()
+        new_package_path = os.path.join(*apkfile_package_name.split('.'))
+        new_filename_fix_path = os.path.join(root.get_full_path(), new_package_path, new.name + '.smali')
+        if os.path.exists(new_filename) or os.path.exists(new_filename_fix_path):
             # If target file already exists, this probably was not the correct deobfuscation. Skip it
             return False
         with open(file.get_full_path(), 'r') as readfile:
@@ -221,12 +231,13 @@ class Renamer:
                         if apkmethod not in apkfile.methods or apkmethod.id in done_methods:
                             continue
                         done_methods.append(apkmethod.id)
-                        to_search = self.method_call_name.match('.method '+method.signature).group(1)
-                        method_name = self.method_name.match('.method '+method.signature).group(1)
-                        new_method_name = self.method_name.match('.method '+apkmethod.signature).group(1)
+                        to_search = self.method_call_name.match('.method ' + method.signature).group(1)
+                        method_name = self.method_name.match('.method ' + method.signature).group(1)
+                        new_method_name = self.method_name.match('.method ' + apkmethod.signature).group(1)
                         # print('> Changing Method', method.signature, 'to', method.signature.replace(method_name + '(', new_method_name + '('))
                         # print('In', file.get_full_package())
-                        logging.info('METHOD_RENAME: ' + method_name + ' IN ' + file.get_full_path() + ' TO ' + new_method_name)
+                        logging.info(
+                            'METHOD_RENAME: ' + method_name + ' IN ' + file.get_full_path() + ' TO ' + new_method_name)
                         method_replaces[method.signature] = \
                             method.signature.replace(method_name + '(', new_method_name + '(')
                         call_replaces[call_string_left + to_search] = \

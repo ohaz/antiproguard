@@ -66,12 +66,14 @@ def recursive_iterate(parent):
     :param parent: the parent node
     :return: void
     """
-    for f in os.listdir(parent.get_full_path()):
-        if f.endswith('.smali'):
+    parent_path = parent.get_full_path()
+    for f in os.listdir(parent_path):
+        current_path = os.path.join(parent_path, f)
+        if f.endswith('.smali') and not os.path.isdir(current_path):
             # Found a smali file, add it to the parent and stop iterating
             file = File(f, parent)
             parent.add_child_file(file)
-        else:
+        elif os.path.isdir(current_path):
             # Found a new package, add it to the parent and continue iterating
             p = Package(f, parent)
             parent.add_child_package(p)
@@ -410,13 +412,6 @@ def new_analyze(path):
     renamer.rename_classes()
     print(Fore.CYAN + 'Renaming Packages and Package-Calls' + Style.RESET_ALL)
     renamer.rename_packages()
-
-    # For debugging help, or if someone needs the hints for a different program, we return the hints so that they can be
-    # saved to a file.
-    js = {}
-    for eop in eops:
-        js[eop.get_full_package()] = eop.get_hints()
-    return js
 
 
 def insert_only(path):

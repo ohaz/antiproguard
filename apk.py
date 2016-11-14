@@ -581,6 +581,14 @@ class File:
         self.methods = []
         self.hints = []
 
+    def search_special(self):
+        """
+        Searches for a special package, bottom-up
+
+        :return: the first special node found
+        """
+        return self.parent.search_special()
+
     def get_hints(self):
         """
         Gets the 'hints' for this file in dict format
@@ -956,10 +964,10 @@ class Method:
             if not found:
                 if not instr.startswith('.') and not instr.startswith('0x') and not instr.startswith(':') \
                         and not instr.startswith('#') and not instr.startswith('-0x'):
+                    print('Found an unknown instruction! Is it a new one?')
                     print(instr)
                     print(self.file.name)
                     print(self.file.get_full_package())
-                    exit()
                 if instr.startswith('.annotation'):
                     in_annotation = True
                 continue
