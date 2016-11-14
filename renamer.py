@@ -63,7 +63,7 @@ class Renamer:
             other_path = other_package.replace('.', os.sep)
             # Move the package to it's new location
             self.create_and_copy(eop.get_full_path(), os.path.join(special.get_full_path(), other_path))
-            logging.info('PACKAGE_RENAME: ' + eop.get_full_path() + ' TO ' + other_package)
+            logging.info('PACKAGE_RENAME: ' + eop.get_full_package() + ' TO ' + other_package)
 
     def rename_classes(self):
         """
