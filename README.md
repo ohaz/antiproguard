@@ -1,4 +1,4 @@
-# Deguard
+# Anti-ProGuard
 
 ## Setup
 
@@ -20,9 +20,9 @@
 The main script to run is deguard.py
 ### Basic usage guide:
 
-* If you want to add a jar/dex file to the database, run `python deguard.py -i <file.jar/file.dex>` (this requires the android SDK to be installed)
-* If you want to add a whole, unobfuscated apk to the database, run `python deguard.py -sb -t <file.apk>`
-* If you want to deobfuscate an apk, run `python deguard.py -d <file.apk>` The result is called "[file_name].deobfuscated.apk"
+* If you want to add a jar/dex file to the database, run `python antiproguard.py -i <file.jar/file.dex>` (this requires the android SDK to be installed)
+* If you want to add a whole, unobfuscated apk to the database, run `python antiproguard.py -sb -t <file.apk>`
+* If you want to deobfuscate an apk, run `python antiproguard.py -d <file.apk>` The result is called "[file_name].deobfuscated.apk"
 
 ### Additional parameters:
 
