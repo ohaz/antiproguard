@@ -14,6 +14,7 @@ from elsim import SimHash
 import datetime
 import json
 from tqdm import tqdm
+from sqlalchemy.exc import OperationalError
 import copy
 
 try:
@@ -293,6 +294,7 @@ def new_analyze(path):
                                 # We can now add the library and the package to the hints of the eop
                                 if (lib, f.package) not in eop_suggestions:
                                     eop_suggestions.append((lib, f.package))
+                    break
         if len(eop_suggestions) > 0:
             # We found a result - this package probably can be deobfuscated
             temp_suggestions = list()
@@ -528,6 +530,14 @@ def main():
     base.force_skip = args.force_skip if args.force_skip is not None else []
     base.ignore_length = args.ignore_length
 
+    # Test if SQL connection works
+
+    try:
+        q_methods = apkdb.session.query(apkdb.Library).first()
+    except OperationalError as e:
+        print(Fore.RED + 'Database connection does not work. Is it running?')
+        exit()
+
     # Iterate over all apks/jars/dexs
     for apk in apks:
         if args.insert:
@@ -563,9 +573,7 @@ def main():
 
         print(Style.RESET_ALL)
         # This calls the analyze method:
-        js = new_analyze(os.path.join(os.getcwd(), output_folder))
-        with open(os.path.basename(apk)[:-4] + '_hints.json', 'w+') as f:
-            json.dump(js, f, sort_keys=True, indent=4)
+        new_analyze(os.path.join(os.getcwd(), output_folder))
         print(Fore.GREEN + '---------------------------------------------')
         print('Done deobfuscating...' + Style.RESET_ALL)
 
