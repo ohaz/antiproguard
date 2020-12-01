@@ -1,6 +1,6 @@
 colorama == 0.3.7
 defusedxml == 0.4.1
 simhash == 1.7.0
-SQLAlchemy == 1.0.9
+SQLAlchemy == 1.3.0
 SQLAlchemy_Utils == 0.32.9
 tqdm == 4.8.3
